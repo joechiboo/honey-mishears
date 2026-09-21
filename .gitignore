@@ -6,7 +6,6 @@
 build/
 .flutter-plugins
 .flutter-plugins-dependencies
-pubspec.lock
 
 # IDE
 .idea/
@@ -49,3 +48,6 @@ linux/flutter/ephemeral/
 # OS
 .DS_Store
 Thumbs.db
+
+# Android 上架簽章（絕不進版控）
+android/key.properties

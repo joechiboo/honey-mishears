@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "_readme": "諧音梗設定檔。要新增一個梗，只要在 rules 陣列加一筆即可，不需要改任何程式碼。effect 目前支援 none / dust / lottery；animationTrigger 必須對應 Rive 狀態機裡的 Trigger 名稱（素材未完成時會由佔位角色模擬）。",
+  "fallback": {
+    "id": "confused",
+    "label": "聽不懂",
+    "keywords": [],
+    "mishearAs": "",
+    "animationTrigger": "confuse",
+    "effect": "none",
+    "lines": [
+      "嗯？你剛剛說……什麼呀？",
+      "我沒聽清楚耶，可以再說一次嗎？",
+      "欸～那是什麼意思呀？"
+    ]
+  },
+  "rules": [
+    {
+      "id": "clean",
+      "label": "打掃房間",
+      "keywords": ["親一個", "親一下", "親一口", "親親", "親我"],
+      "mishearAs": "清一個",
+      "animationTrigger": "clean",
+      "effect": "dust",
+      "lines": [
+        "清一個？好呀，那我先從你房間開始。",
+        "交給我，這裡的灰塵我已經看很久了。",
+        "清一個是吧，袖子我都捲好了。"
+      ]
+    },
+    {
+      "id": "lottery",
+      "label": "報明牌",
+      "keywords": ["抱一個", "抱一下", "抱抱", "抱我"],
+      "mishearAs": "報一個",
+      "animationTrigger": "lottery",
+      "effect": "lottery",
+      "lines": [
+        "報一個是吧？墨鏡戴好，聽我說。",
+        "這組我觀察很久了，你自己斟酌。",
+        "報明牌可以，中了記得請我吃飯。"
+      ]
+    }
+  ]
+}
