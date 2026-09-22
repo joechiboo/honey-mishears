@@ -74,13 +74,18 @@ honey-mishears/
 │           ├── character_motion.dart      呼吸與歪頭（圖片／佔位角色共用）
 │           ├── rive_character.dart        Rive 角色
 │           ├── image_character.dart       圖片角色（AI 生成的 PNG）
-│           ├── placeholder_character.dart 佔位角色（純 Flutter 繪製）
+│           ├── placeholder_character.dart 佔位角色（向量繪製，永遠的保底）
+│           ├── painters/
+│           │   └── wife_painter.dart     角色的向量筆觸（Path + 漸層）
 │           ├── dialogue_bubble.dart       台詞對話框
 │           ├── push_to_talk_button.dart   按住說話按鈕
 │           ├── dust_effect.dart           灰塵特效
 │           ├── lottery_card.dart          明牌號碼卡（含娛樂性質聲明）
 │           ├── notice_sheet.dart          權限／錯誤提示面板
 │           └── language_pack_sheet.dart   語言包下載引導（五個狀態）
+├── tool/
+│   ├── generate_app_icon.py           產生 App 圖示
+│   └── render_character_preview.dart  把六個姿勢畫成 PNG（調角色時用）
 └── android/
     └── app/src/main/kotlin/.../SpeechModelBridge.kt
                                      語言包 API 的 platform channel

@@ -82,12 +82,13 @@ App 有三種渲染器，啟動時掃素材決定用誰，三者吃同一組 `Ch
 |---|---|---|---|
 | 1 | Rive | `assets/rive/wife.riv` 存在 | 完整動畫，本文件規格 |
 | 2 | 圖片 | `assets/character/default/idle.png` 存在 | 一個姿勢一張靜態圖，只有呼吸與歪頭 |
-| 3 | 佔位角色 | 永遠可用的保底 | 純 Flutter 圖形 |
+| 3 | 佔位角色 | 永遠可用的保底 | `WifePainter` 的向量繪製，只有呼吸與歪頭 |
 
 **`wife.riv` 一放進去就是最優先**，會蓋過圖片角色，不必先把圖刪掉。
 判斷邏輯在 `lib/ui/widgets/character_renderer.dart`。
 
-佔位角色（`placeholder_character.dart`）各姿勢的表現，可以拿來當分鏡參考：
+佔位角色（`painters/wife_painter.dart`）各姿勢的表現，可以拿來當分鏡參考：
+用 `flutter test tool/render_character_preview.dart` 可以把六張畫出來看：
 
 | CharacterPose | 佔位角色的表現 |
 |---|---|

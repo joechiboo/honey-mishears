@@ -1,8 +1,16 @@
 # 角色形象的下一步：AI 形象與捏人系統
 
-目前畫面上的她是 `PlaceholderCharacter`——純 Flutter 幾何圖形拼的，
-只為了「看得出現在是什麼狀態」，從來沒打算好看。這份文件記錄接下來
-怎麼把她換成像樣的形象，以及**捏人（自訂外觀）該怎麼做才不會爆掉**。
+目前畫面上的她是 `PlaceholderCharacter`，底下是 `WifePainter` 的向量繪製
+（貝茲曲線、漸層上色、動漫式大眼含高光）。它不吃任何 asset，所以是三層渲染器
+最底下永遠可用的保底。
+
+這份文件記錄接下來怎麼換成 AI 生成的形象，以及**捏人（自訂外觀）該怎麼做
+才不會爆掉**。
+
+> 調 `WifePainter` 的座標前，先跑
+> `flutter test tool/render_character_preview.dart`，
+> 它會把六個姿勢畫成 PNG 到 `build/character_preview/`。
+> 憑座標想像改出來的東西幾乎都是歪的，一定要看圖。
 
 ---
 
