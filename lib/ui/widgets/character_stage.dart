@@ -8,6 +8,7 @@ import 'character_renderer.dart';
 import 'dust_effect.dart';
 import 'image_character.dart';
 import 'lottery_card.dart';
+import 'painters/room_painter.dart';
 import 'placeholder_character.dart';
 import 'rive_character.dart';
 
@@ -34,7 +35,13 @@ class CharacterStage extends StatelessWidget {
     return Stack(
       alignment: Alignment.center,
       children: [
-        // 背景光暈
+        // 房間：牆、地板、窗、掛畫、地毯、盆栽
+        const Positioned.fill(
+          child: CustomPaint(painter: RoomPainter()),
+        ),
+
+        // 角色身後的光暈。房間畫進來之後它的作用變了——
+        // 不再是裝飾，而是把她從牆面上拉開一層，不然人跟背景會黏在一起
         Container(
           width: 300,
           height: 300,
@@ -42,7 +49,7 @@ class CharacterStage extends StatelessWidget {
             shape: BoxShape.circle,
             gradient: RadialGradient(
               colors: [
-                AppTheme.blush.withOpacity(0.45),
+                AppTheme.cream.withOpacity(0.55),
                 AppTheme.cream.withOpacity(0.0),
               ],
             ),

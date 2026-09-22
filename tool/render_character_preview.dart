@@ -15,6 +15,9 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:honey_mishears/core/app_theme.dart';
 import 'package:honey_mishears/core/character_pose.dart';
+import 'package:honey_mishears/data/mishear_rule.dart';
+import 'package:honey_mishears/ui/widgets/character_renderer.dart';
+import 'package:honey_mishears/ui/widgets/character_stage.dart';
 import 'package:honey_mishears/ui/widgets/painters/wife_painter.dart';
 
 const double _scale = 2.0;
@@ -60,6 +63,57 @@ void main() {
 
       File('${outDir.path}/${pose.name}.png').writeAsBytesSync(bytes!);
       debugPrint('寫出 ${pose.name}.png');
+    }
+  });
+
+  // 角色單獨看起來對、擺進房間卻不對是常有的事（被家具卡到、跟牆同色），
+  // 所以整個舞台也要輸出一份。尺寸取手機上那塊區域的實際大小。
+  testWidgets('把整個舞台畫成 PNG', (tester) async {
+    final outDir = Directory('build/character_preview');
+    if (!outDir.existsSync()) outDir.createSync(recursive: true);
+
+    const cases = {
+      'stage_idle': (CharacterPose.idle, StageEffect.none),
+      'stage_clean': (CharacterPose.clean, StageEffect.dust),
+    };
+
+    for (final entry in cases.entries) {
+      final (pose, effect) = entry.value;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: RepaintBoundary(
+              key: ValueKey(entry.key),
+              child: SizedBox(
+                width: 360,
+                height: 400,
+                child: DecoratedBox(
+                  decoration:
+                      const BoxDecoration(gradient: AppTheme.backgroundGradient),
+                  child: CharacterStage(
+                    pose: pose,
+                    effect: effect,
+                    assets: CharacterAssets.placeholderOnly,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(ValueKey(entry.key)),
+      );
+      final bytes = await tester.runAsync(() async {
+        final image = await boundary.toImage(pixelRatio: _scale);
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        return data!.buffer.asUint8List();
+      });
+
+      File('${outDir.path}/${entry.key}.png').writeAsBytesSync(bytes!);
+      debugPrint('寫出 ${entry.key}.png');
     }
   });
 }
