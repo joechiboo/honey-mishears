@@ -17,6 +17,7 @@ App 名稱：**AI 老婆**
 |------|--------|----------|
 | 親一個 | 清一個 | 捲起袖子開始打掃，畫面飄起灰塵 |
 | 抱一個 | 報一個 | 戴上墨鏡開始報明牌 |
+| 你好 | 泥好 | 敷起泥膜，眼睛壓兩片小黃瓜 |
 | 其他 | — | 歪頭，說一句可愛的困惑台詞 |
 
 每個情境都有 3 句台詞隨機挑選，避免重複感。
@@ -44,6 +45,7 @@ honey-mishears/
 ├── assets/
 │   ├── config/
 │   │   └── mishear_rules.json   ← 諧音梗設定檔（新增梗只改這裡）
+│   ├── character/default/       ← AI 角色圖放這裡（一個姿勢一張去背 PNG）
 │   └── rive/
 │       └── (wife.riv)           ← Rive 素材放這裡，目前還沒有
 ├── docs/
@@ -65,7 +67,10 @@ honey-mishears/
 │       ├── home_page.dart           主畫面（流程調度都在這）
 │       └── widgets/
 │           ├── character_stage.dart       舞台：角色 + 特效
+│           ├── character_renderer.dart    決定誰來畫（Rive > 圖片 > 佔位）
+│           ├── character_motion.dart      呼吸與歪頭（圖片／佔位角色共用）
 │           ├── rive_character.dart        Rive 角色
+│           ├── image_character.dart       圖片角色（AI 生成的 PNG）
 │           ├── placeholder_character.dart 佔位角色（純 Flutter 繪製）
 │           ├── dialogue_bubble.dart       台詞對話框
 │           ├── push_to_talk_button.dart   按住說話按鈕
@@ -183,3 +188,10 @@ release 走 R8 壓縮。
 
 🚧 MVP。角色目前是佔位圖形，Rive 素材規格見
 [`docs/rive_state_machine.md`](docs/rive_state_machine.md)。
+
+換成 AI 生成角色圖的路線已經鋪好——把去背 PNG 丟進
+[`assets/character/default/`](assets/character/default/README.md) 就會自動生效，
+缺圖的姿勢退回 `idle.png`，一張都沒有就退回佔位角色。
+
+形象與未來捏人系統的完整取捨見
+[`docs/character_art_roadmap.md`](docs/character_art_roadmap.md)。

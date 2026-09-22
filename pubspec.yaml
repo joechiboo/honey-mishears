@@ -61,5 +61,7 @@ flutter:
   assets:
     # 諧音梗設定檔：新增梗只要改這支 JSON，不必動程式
     - assets/config/
-    # Rive 角色素材（尚未完成時，程式會自動退回佔位角色）
+    # Rive 角色素材（最優先；尚未完成時自動往下退）
     - assets/rive/
+    # AI 角色圖，一個姿勢一張去背 PNG（沒有圖就退回內建佔位角色）
+    - assets/character/default/

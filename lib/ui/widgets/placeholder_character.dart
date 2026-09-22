@@ -4,71 +4,26 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_theme.dart';
 import '../../core/character_pose.dart';
+import 'character_motion.dart';
 
-/// 佔位角色：在 Rive 素材完成前，用純 Flutter 圖形畫一個簡單的 2D 角色。
+/// 佔位角色：在真正的素材完成前，用純 Flutter 圖形畫一個簡單的 2D 角色。
 /// 目標只有一個 —— 看得出「她現在是什麼狀態」，不追求精緻。
-class PlaceholderCharacter extends StatefulWidget {
+/// 這也是素材全缺時的保底，所以它永遠不該依賴任何 asset。
+class PlaceholderCharacter extends StatelessWidget {
   const PlaceholderCharacter({super.key, required this.pose});
 
   final CharacterPose pose;
-
-  @override
-  State<PlaceholderCharacter> createState() => _PlaceholderCharacterState();
-}
-
-class _PlaceholderCharacterState extends State<PlaceholderCharacter>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
 
   static const Color _skin = Color(0xFFFCE3D6);
   static const Color _hair = Color(0xFF6E4B3A);
 
   @override
-  void initState() {
-    super.initState();
-    // 一個共用的 0→1→0 循環，拿來做呼吸、掃地擺動等簡單動畫
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final t = _controller.value;
-
-        // 呼吸：輕微縮放
-        final breathe = 1.0 + 0.015 * t;
-
-        // 打掃時左右擺動，裝傻時固定歪頭，聆聽時微微前傾
-        double tilt = 0;
-        if (widget.pose == CharacterPose.clean) {
-          tilt = (t - 0.5) * 0.16;
-        } else if (widget.pose == CharacterPose.confused) {
-          tilt = 0.18;
-        } else if (widget.pose == CharacterPose.listening) {
-          tilt = -0.04;
-        }
-
-        return Transform.rotate(
-          angle: tilt,
-          child: Transform.scale(scale: breathe, child: child),
-        );
-      },
-      child: _buildBody(),
-    );
+    // 呼吸與傾斜交給 CharacterMotion；t 是 0→1→0 的循環值，掃把拿去擺動
+    return CharacterMotion(pose: pose, builder: (context, t) => _buildBody(t));
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(double t) {
     return SizedBox(
       width: 220,
       height: 280,
@@ -131,21 +86,17 @@ class _PlaceholderCharacterState extends State<PlaceholderCharacter>
             ),
           ),
           // 打掃時手上的掃把
-          if (widget.pose == CharacterPose.clean)
+          if (pose == CharacterPose.clean)
             Positioned(
               right: 0,
               bottom: 12,
-              child: AnimatedBuilder(
-                animation: _controller,
-                builder: (context, child) => Transform.rotate(
-                  angle: -0.5 + (_controller.value - 0.5) * 0.7,
-                  child: child,
-                ),
+              child: Transform.rotate(
+                angle: -0.5 + (t - 0.5) * 0.7,
                 child: const Text('🧹', style: TextStyle(fontSize: 56)),
               ),
             ),
           // 裝傻時頭上的問號
-          if (widget.pose == CharacterPose.confused)
+          if (pose == CharacterPose.confused)
             const Positioned(
               top: 0,
               right: 14,
@@ -158,7 +109,7 @@ class _PlaceholderCharacterState extends State<PlaceholderCharacter>
 
   Widget _buildFace() {
     // 敷泥膜：整張臉蓋一層泥，眼睛壓兩片小黃瓜
-    if (widget.pose == CharacterPose.mask) {
+    if (pose == CharacterPose.mask) {
       return Stack(
         alignment: Alignment.topCenter,
         children: [
@@ -188,7 +139,7 @@ class _PlaceholderCharacterState extends State<PlaceholderCharacter>
     }
 
     // 報明牌時戴墨鏡，其他狀態畫眼睛
-    if (widget.pose == CharacterPose.lottery) {
+    if (pose == CharacterPose.lottery) {
       return Stack(
         alignment: Alignment.topCenter,
         children: [
@@ -208,7 +159,7 @@ class _PlaceholderCharacterState extends State<PlaceholderCharacter>
       );
     }
 
-    final bool wide = widget.pose == CharacterPose.listening;
+    final bool wide = pose == CharacterPose.listening;
     final double eyeHeight = wide ? 22 : 18;
 
     return Stack(
@@ -238,7 +189,7 @@ class _PlaceholderCharacterState extends State<PlaceholderCharacter>
         ),
         Positioned(
           top: 100,
-          child: _mouth(width: widget.pose == CharacterPose.confused ? 14 : 22),
+          child: _mouth(width: pose == CharacterPose.confused ? 14 : 22),
         ),
       ],
     );
