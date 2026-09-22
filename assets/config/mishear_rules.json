@@ -18,7 +18,13 @@
     {
       "id": "clean",
       "label": "打掃房間",
-      "keywords": ["親一個", "親一下", "親一口", "親親", "親我"],
+      "keywords": [
+        "親一個",
+        "親一下",
+        "親一口",
+        "親親",
+        "親我"
+      ],
       "mishearAs": "清一個",
       "animationTrigger": "clean",
       "effect": "dust",
@@ -31,7 +37,12 @@
     {
       "id": "lottery",
       "label": "報明牌",
-      "keywords": ["抱一個", "抱一下", "抱抱", "抱我"],
+      "keywords": [
+        "抱一個",
+        "抱一下",
+        "抱抱",
+        "抱我"
+      ],
       "mishearAs": "報一個",
       "animationTrigger": "lottery",
       "effect": "lottery",
@@ -39,6 +50,23 @@
         "報一個是吧？墨鏡戴好，聽我說。",
         "這組我觀察很久了，你自己斟酌。",
         "報明牌可以，中了記得請我吃飯。"
+      ]
+    },
+    {
+      "id": "mask",
+      "label": "敷泥膜",
+      "keywords": [
+        "你好",
+        "妳好",
+        "您好"
+      ],
+      "mishearAs": "泥好",
+      "animationTrigger": "mask",
+      "effect": "none",
+      "lines": [
+        "泥好？那我先敷個臉，你等我二十分鐘。",
+        "這泥是好泥，敷起來很舒服，你要不要也來一片？",
+        "你說泥好，那我就敷了喔，等一下不要跟我說話。"
       ]
     }
   ]

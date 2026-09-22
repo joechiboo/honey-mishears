@@ -13,7 +13,7 @@
 | 檔案 | `wife.riv` | `lib/ui/widgets/rive_character.dart` → `kRiveAssetPath` |
 | Artboard | 任意（程式用預設 artboard） | — |
 | State Machine | `WifeStateMachine` | `kRiveStateMachine` |
-| Trigger | `idle` / `listen` / `clean` / `lottery` / `confuse` | `CharacterPose.riveTrigger` |
+| Trigger | `idle` / `listen` / `clean` / `lottery` / `mask` / `confuse` | `CharacterPose.riveTrigger` |
 
 > 程式送的是 **Trigger**（不是 Boolean、不是 Number）。
 > 找不到對應 trigger 時程式不會崩潰，只會在 log 印一行警告、角色留在原狀態。
@@ -22,7 +22,7 @@
 
 ## 二、狀態（States）
 
-狀態機建議只做**一層 Layer**，五個狀態互相可達：
+狀態機建議只做**一層 Layer**，六個狀態互相可達：
 
 | State | 進入時機 | 動作描述 | 循環 |
 |---|---|---|---|
@@ -30,6 +30,7 @@
 | `Listening` | 使用者按住按鈕 | 身體微微前傾、眼睛睜大、手靠近耳邊 | ✅ Loop |
 | `Cleaning` | 聽成「清一個」 | 捲袖子 → 拿起掃把 → 來回掃地 | ✅ Loop |
 | `Lottery` | 聽成「報一個」 | 戴上墨鏡（一次性）→ 抱胸點頭的自信待機 | 前段 One-shot，後段 Loop |
+| `Mask` | 聽成「泥好」 | 抹上泥膜（一次性）→ 閉眼躺平的敷臉待機 | 前段 One-shot，後段 Loop |
 | `Confused` | 聽不懂 | 歪頭、頭上冒問號、眨兩下眼 | ✅ Loop（幅度小） |
 
 ### 為什麼反應狀態要 Loop？
@@ -41,7 +42,7 @@ App 不會主動把她切回 `Idle`——使用者下一次按住說話時才會
 
 ## 三、轉場（Transitions）
 
-從**任一狀態**都要能被 trigger 打斷，也就是每個 trigger 都需要 5 條轉場
+從**任一狀態**都要能被 trigger 打斷，也就是每個 trigger 都需要 6 條轉場
 （或用 Rive 的 `Any State` 節點一次搞定，**建議用 Any State**）：
 
 ```
@@ -49,6 +50,7 @@ Any State ──[idle]────▶ Idle
 Any State ──[listen]──▶ Listening
 Any State ──[clean]───▶ Cleaning
 Any State ──[lottery]─▶ Lottery
+Any State ──[mask]────▶ Mask
 Any State ──[confuse]─▶ Confused
 ```
 
@@ -83,6 +85,7 @@ Rive 素材完成前，App 使用 `lib/ui/widgets/placeholder_character.dart`：
 | `listening` | 眼睛變大、身體微傾 |
 | `clean` | 左右擺動 + 🧹 emoji 擺盪 + 灰塵粒子 |
 | `lottery` | 黑色墨鏡橫條 + 號碼卡浮現 |
+| `mask` | 整臉蓋綠泥 + 兩片小黃瓜 |
 | `confused` | 固定歪頭 + ❓ emoji |
 
 切換方式：把 `wife.riv` 放進 `assets/rive/` 即可，程式啟動時會自動偵測

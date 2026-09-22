@@ -14,6 +14,9 @@ enum CharacterPose {
   /// 報明牌：戴墨鏡
   lottery,
 
+  /// 敷泥膜：整臉塗綠、眼睛蓋小黃瓜
+  mask,
+
   /// 歪頭裝傻
   confused,
 }
@@ -30,6 +33,8 @@ extension CharacterPoseX on CharacterPose {
         return 'clean';
       case CharacterPose.lottery:
         return 'lottery';
+      case CharacterPose.mask:
+        return 'mask';
       case CharacterPose.confused:
         return 'confuse';
     }
@@ -43,6 +48,8 @@ CharacterPose characterPoseFromTrigger(String trigger) {
       return CharacterPose.clean;
     case 'lottery':
       return CharacterPose.lottery;
+    case 'mask':
+      return CharacterPose.mask;
     case 'confuse':
       return CharacterPose.confused;
     case 'listen':

@@ -157,6 +157,36 @@ class _PlaceholderCharacterState extends State<PlaceholderCharacter>
   }
 
   Widget _buildFace() {
+    // 敷泥膜：整張臉蓋一層泥，眼睛壓兩片小黃瓜
+    if (widget.pose == CharacterPose.mask) {
+      return Stack(
+        alignment: Alignment.topCenter,
+        children: [
+          Positioned.fill(
+            child: Container(
+              margin: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9CB38A).withOpacity(0.88),
+                borderRadius: BorderRadius.circular(70),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 50,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _cucumber(),
+                const SizedBox(width: 30),
+                _cucumber(),
+              ],
+            ),
+          ),
+          Positioned(top: 106, child: _mouth(width: 16)),
+        ],
+      );
+    }
+
     // 報明牌時戴墨鏡，其他狀態畫眼睛
     if (widget.pose == CharacterPose.lottery) {
       return Stack(
@@ -230,6 +260,17 @@ class _PlaceholderCharacterState extends State<PlaceholderCharacter>
             color: Colors.white,
             shape: BoxShape.circle,
           ),
+        ),
+      );
+
+  /// 敷臉用的小黃瓜片
+  Widget _cucumber() => Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: const Color(0xFFCDE6B0),
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xFF7FA05C), width: 3),
         ),
       );
 

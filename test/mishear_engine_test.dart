@@ -103,7 +103,7 @@ void main() {
     test('assets/config/mishear_rules.json 可以正常解析', () async {
       final config = await MishearRepository().load();
 
-      expect(config.rules.map((r) => r.id), containsAll(['clean', 'lottery']));
+      expect(config.rules.map((r) => r.id), containsAll(['clean', 'lottery', 'mask']));
       expect(config.fallback.id, 'confused');
 
       // 規格要求：每個情境至少 3 句台詞，避免重複感
