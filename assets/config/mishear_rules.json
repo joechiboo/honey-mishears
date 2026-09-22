@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_readme": "諧音梗設定檔。要新增一個梗，只要在 rules 陣列加一筆即可，不需要改任何程式碼。effect 目前支援 none / dust / lottery；animationTrigger 必須對應 Rive 狀態機裡的 Trigger 名稱（素材未完成時會由佔位角色模擬）。所有 lines 都可以用 {name} 插入她的名字，還沒取名時會自動變成「我」。lines 之外還可以寫 linesWhen：key 是她上一個狀態的規則 id（例如剛敷完泥膜是 mask），特殊 key「repeat」代表同一條梗連續命中；對得上就用那組台詞，對不上就退回 lines，所以不寫 linesWhen 的規則完全照舊。取名環節的內容見下方 naming 區塊。",
+  "_readme": "諧音梗設定檔。要新增一個梗，只要在 rules 陣列加一筆即可，不需要改任何程式碼。effect 目前支援 none / dust / lottery / bed；animationTrigger 必須對應 Rive 狀態機裡的 Trigger 名稱（素材未完成時會由佔位角色模擬）。所有 lines 都可以用 {name} 插入她的名字，還沒取名時會自動變成「我」。lines 之外還可以寫 linesWhen：key 是她上一個狀態的規則 id（例如剛敷完泥膜是 mask），特殊 key「repeat」代表同一條梗連續命中；對得上就用那組台詞，對不上就退回 lines，所以不寫 linesWhen 的規則完全照舊。hint 是這則回憶「還沒發生」時顯示的那句話：要指得到路，但不能把諧音講破，否則回憶簿就退回答案本了。取名環節見下方 naming 區塊，晾太久她自己會做的事見 idle 區塊。",
   "fallback": {
     "id": "confused",
     "label": "聽不懂",
@@ -32,6 +32,7 @@
         "親親",
         "親我"
       ],
+      "hint": "想跟她討一點甜的，用嘴巴給的那種。",
       "mishearAs": "清一個",
       "animationTrigger": "clean",
       "effect": "dust",
@@ -67,6 +68,7 @@
         "緊緊抱",
         "抱住我"
       ],
+      "hint": "同樣是冷天會想要的那個動作，只是這次你要求得更緊一點。",
       "mishearAs": "包緊我",
       "animationTrigger": "bundle",
       "effect": "none",
@@ -96,6 +98,7 @@
         "抱抱",
         "抱我"
       ],
+      "hint": "冷的時候，你會想跟她要的那個動作。",
       "mishearAs": "報一個",
       "animationTrigger": "lottery",
       "effect": "lottery",
@@ -126,6 +129,7 @@
         "妳好",
         "您好"
       ],
+      "hint": "最平常不過的一句招呼，她也能聽歪。",
       "mishearAs": "泥好",
       "animationTrigger": "mask",
       "effect": "none",
@@ -146,6 +150,26 @@
           "等一下，墨鏡拿下來才敷得上。"
         ]
       }
+    },
+    {
+      "id": "room",
+      "label": "乖乖坐到床上",
+      "keywords": [
+        "去房間",
+        "回房間",
+        "進房間",
+        "去床上",
+        "上床"
+      ],
+      "hint": "提議換個地方再說——比較私密的那一間。",
+      "mishearAs": "去房間坐",
+      "animationTrigger": "sit",
+      "effect": "bed",
+      "lines": [
+        "去房間坐？好啊——我坐好了，然後呢？",
+        "坐是坐下來了，你站在那邊做什麼？",
+        "我先坐著等你，你慢慢想要說什麼。"
+      ]
     }
   ],
   "naming": {
@@ -396,5 +420,14 @@
         "打"
       ]
     }
+  },
+  "idle": {
+    "_readme": "晾太久之後她自己會做的事。afterSeconds 設 0 或把 lines 清空就是關掉。",
+    "afterSeconds": 45,
+    "lines": [
+      "……你還在嗎？那我先滑一下手機喔。",
+      "太安靜了，我看個影片。",
+      "沒關係，你忙你的，我這邊有得看。"
+    ]
   }
 }

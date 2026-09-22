@@ -71,6 +71,10 @@ double _tiltFor(CharacterPose pose, double t) {
       return 0; // 敷著面膜，不敢亂動
     case CharacterPose.bundled:
       return (t - 0.5) * 0.05; // 包太緊，只能小幅度晃
+    case CharacterPose.sitting:
+      return 0; // 坐得直挺挺，這份「乖」就是笑點
+    case CharacterPose.scrolling:
+      return 0.05 + (t - 0.5) * 0.02; // 滑手機：固定微駝，再加一點點晃
     case CharacterPose.idle:
     case CharacterPose.lottery:
       return 0;

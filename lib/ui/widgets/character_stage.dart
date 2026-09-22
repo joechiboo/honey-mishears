@@ -8,6 +8,7 @@ import 'character_renderer.dart';
 import 'dust_effect.dart';
 import 'image_character.dart';
 import 'lottery_card.dart';
+import 'painters/bed_painter.dart';
 import 'painters/room_painter.dart';
 import 'placeholder_character.dart';
 import 'rive_character.dart';
@@ -56,14 +57,31 @@ class CharacterStage extends StatelessWidget {
           ),
         ),
 
+        // 床的後半：床頭板、床墊、枕頭
+        if (effect == StageEffect.bed)
+          const Positioned.fill(
+            child: CustomPaint(painter: BedPainter(layer: BedLayer.back)),
+          ),
+
         // 打掃情境：滿天灰塵
         if (effect == StageEffect.dust) const Positioned.fill(child: DustEffect()),
 
-        // 角色本人
+        // 角色本人。坐在床上時整個人要往下沉，不然會像站在床前面
         Align(
-          alignment: const Alignment(0, 0.15),
+          alignment: effect == StageEffect.bed
+              ? const Alignment(0, 0.42)
+              : const Alignment(0, 0.15),
           child: _buildCharacter(),
         ),
+
+        // 床的前半：棉被蓋過她的下半身。
+        // 一定要在角色之後畫——這層遮擋就是「坐著」的全部
+        if (effect == StageEffect.bed)
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(painter: BedPainter(layer: BedLayer.front)),
+            ),
+          ),
 
         // 報明牌情境：號碼卡（含娛樂性質聲明）
         if (effect == StageEffect.lottery && lotteryDraw != null)

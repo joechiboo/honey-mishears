@@ -153,13 +153,30 @@ void main() {
     test('assets/config/mishear_rules.json 可以正常解析', () async {
       final config = await MishearRepository().load();
 
-      expect(config.rules.map((r) => r.id), containsAll(['clean', 'lottery', 'mask']));
+      expect(config.rules.map((r) => r.id),
+          containsAll(['clean', 'lottery', 'mask', 'room']));
       expect(config.fallback.id, 'confused');
+
+      // 晾太久她會自己滑手機。設定缺一半就會安靜地關掉，所以這裡要守住。
+      expect(config.idle.enabled, isTrue);
+      expect(config.idle.lines.length, greaterThanOrEqualTo(3));
 
       // 規格要求：每個情境至少 3 句台詞，避免重複感
       for (final rule in [...config.rules, config.fallback]) {
         expect(rule.lines.length, greaterThanOrEqualTo(3),
             reason: '${rule.id} 的台詞不足 3 句');
+      }
+
+      // 每條梗都要有 hint，否則它在回憶簿上會退回一句沒資訊的場面話，
+      // 使用者根本猜不到該說什麼——新增梗時最容易漏掉的就是這欄。
+      for (final rule in config.rules) {
+        expect(rule.hint, isNotEmpty, reason: '${rule.id} 沒寫 hint');
+        for (final keyword in rule.keywords) {
+          expect(rule.hint, isNot(contains(keyword)),
+              reason: '${rule.id} 的 hint 直接寫出關鍵字「$keyword」，等於破梗');
+        }
+        expect(rule.hint, isNot(contains(rule.mishearAs)),
+            reason: '${rule.id} 的 hint 直接寫出她聽成什麼，等於破梗');
       }
     });
 

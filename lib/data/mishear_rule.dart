@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'idle_config.dart';
 import 'naming_config.dart';
 
 /// 舞台特效類型：角色做出反應時，畫面上要疊加的東西
@@ -12,6 +13,10 @@ enum StageEffect {
 
   /// 報明牌：號碼卡（含娛樂性質聲明）
   lottery,
+
+  /// 床：她坐在上面。分前後兩層畫，被子蓋過她的下半身——
+  /// 角色本來就只畫到膝蓋以上，靠這層遮擋才讀得出「坐著」。
+  bed,
 }
 
 StageEffect stageEffectFromName(String? name) {
@@ -20,6 +25,8 @@ StageEffect stageEffectFromName(String? name) {
       return StageEffect.dust;
     case 'lottery':
       return StageEffect.lottery;
+    case 'bed':
+      return StageEffect.bed;
     default:
       return StageEffect.none;
   }
@@ -35,6 +42,12 @@ class MishearRule {
 
   /// 觸發關鍵字；語音辨識結果只要「包含」其中任一個就算命中
   final List<String> keywords;
+
+  /// 這條梗還沒被說中過時，回憶簿上顯示的那句話。
+  ///
+  /// 空字串會退回一句通用的場面話。寫的時候要指得到路又不能講破諧音——
+  /// 一旦寫成「說親一個」，回憶簿就退回答案本了。
+  final String hint;
 
   /// 她「聽成」的詞，例如「清一個」。空字串代表沒有諧音（如 fallback）
   final String mishearAs;
@@ -58,6 +71,7 @@ class MishearRule {
     required this.id,
     required this.label,
     required this.keywords,
+    this.hint = '',
     required this.mishearAs,
     required this.animationTrigger,
     required this.effect,
@@ -74,6 +88,7 @@ class MishearRule {
       label: (json['label'] as String?) ?? '',
       keywords:
           (json['keywords'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      hint: (json['hint'] as String?) ?? '',
       mishearAs: (json['mishearAs'] as String?) ?? '',
       animationTrigger: (json['animationTrigger'] as String?) ?? 'idle',
       effect: stageEffectFromName(json['effect'] as String?),
@@ -128,15 +143,20 @@ class MishearConfig {
   /// 所以不放進 rules，自己一個區塊。
   final NamingConfig naming;
 
+  /// 晾太久之後她自己會做的事。沒設定就是關掉。
+  final IdleConfig idle;
+
   const MishearConfig({
     required this.version,
     required this.fallback,
     required this.rules,
     this.naming = NamingConfig.empty,
+    this.idle = IdleConfig.empty,
   });
 
   factory MishearConfig.fromJson(Map<String, dynamic> json) {
     final naming = json['naming'] as Map<String, dynamic>?;
+    final idle = json['idle'] as Map<String, dynamic>?;
     return MishearConfig(
       version: (json['version'] as num?)?.toInt() ?? 1,
       fallback: MishearRule.fromJson(json['fallback'] as Map<String, dynamic>),
@@ -146,6 +166,7 @@ class MishearConfig {
       naming: naming == null
           ? NamingConfig.empty
           : NamingConfig.fromJson(naming),
+      idle: idle == null ? IdleConfig.empty : IdleConfig.fromJson(idle),
     );
   }
 }

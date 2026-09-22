@@ -20,6 +20,12 @@ enum CharacterPose {
   /// 包緊：換上厚外套、圍上圍巾，包到只剩眼睛
   bundled,
 
+  /// 乖乖坐在床上：手擺在腿上，一臉「我坐好了，然後呢」
+  sitting,
+
+  /// 滑手機：太久沒人理她，低頭滑起來了
+  scrolling,
+
   /// 歪頭裝傻
   confused,
 }
@@ -40,6 +46,10 @@ extension CharacterPoseX on CharacterPose {
         return 'mask';
       case CharacterPose.bundled:
         return 'bundle';
+      case CharacterPose.sitting:
+        return 'sit';
+      case CharacterPose.scrolling:
+        return 'scroll';
       case CharacterPose.confused:
         return 'confuse';
     }
@@ -57,6 +67,10 @@ CharacterPose characterPoseFromTrigger(String trigger) {
       return CharacterPose.mask;
     case 'bundle':
       return CharacterPose.bundled;
+    case 'sit':
+      return CharacterPose.sitting;
+    case 'scroll':
+      return CharacterPose.scrolling;
     case 'confuse':
       return CharacterPose.confused;
     case 'listen':

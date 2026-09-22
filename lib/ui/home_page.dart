@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../core/app_config.dart';
 import '../core/app_theme.dart';
 import '../core/character_pose.dart';
+import '../data/memories.dart';
 import '../data/mishear_repository.dart';
 import '../data/mishear_rule.dart';
 import '../data/telemetry_store.dart';
@@ -21,6 +22,7 @@ import 'widgets/character_stage.dart';
 import 'widgets/dialogue_bubble.dart';
 import 'widgets/language_pack_sheet.dart';
 import 'widgets/naming_sheet.dart';
+import 'widgets/memory_album.dart';
 import 'widgets/notice_sheet.dart';
 import 'widgets/push_to_talk_button.dart';
 import 'widgets/telemetry_sheet.dart';
@@ -37,6 +39,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final SpeechService _speech = SpeechService();
   final LotteryGenerator _lottery = LotteryGenerator();
   final MishearRepository _repository = MishearRepository();
+  final MemoryStore _memoryStore = MemoryStore();
 
   /// 逐字稿回傳。端點沒設定或使用者關掉時，record() 什麼都不做。
   TranscriptUploader? _uploader;
@@ -50,6 +53,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// 她的名字與互動次數。沒有名字是完全合法的狀態，取名從頭到尾都不強制。
   WifeIdentity _identity = WifeIdentity.empty;
+
+  /// 兩個人之間已經發生過的事。回憶簿只寫下這些，其餘留一句曖昧的話。
+  Memories _memories = Memories.empty;
 
   /// 設定檔讀完了沒（讀完才允許按按鈕）
   bool _ready = false;
@@ -76,6 +82,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   String _transcript = '';
   Timer? _finalTimer;
+
+  /// 晾太久之後她自己滑手機。每次互動都重新計時。
+  Timer? _idleTimer;
 
   /// 這一輪辨識引擎回報的錯誤代碼；有值代表「不是聽不懂，是根本沒辨識成功」
   String? _sttError;
@@ -108,14 +117,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _finalTimer?.cancel();
     _offerTimer?.cancel();
+    _idleTimer?.cancel();
     _speech.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // 回到前台重新計時：不然切出去泡個茶回來，她已經在滑手機了
+      _restartIdleTimer();
+      return;
+    }
+
+    _idleTimer?.cancel();
+
     // 切到背景時一定要停掉麥克風，不然系統會一直顯示錄音中
-    if (state != AppLifecycleState.resumed && _listening) {
+    if (_listening) {
       _speech.cancel();
       setState(() {
         _listening = false;
@@ -123,6 +141,35 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _pose = CharacterPose.idle;
       });
     }
+  }
+
+  // ── 晾太久 ────────────────────────────────────────────────
+
+  void _restartIdleTimer() {
+    _idleTimer?.cancel();
+    final idle = _config?.idle;
+    if (idle == null || !idle.enabled) return;
+    _idleTimer = Timer(idle.after, _goIdle);
+  }
+
+  /// 沒人理她夠久了，自己找事做。
+  ///
+  /// 這不是錯誤也不是裝傻，是她閒著——所以不能走 fallback 那條路，
+  /// 也不進回憶簿：被撞見的時候才有意思，寫進去就變成一項功能說明了。
+  void _goIdle() {
+    final idle = _config?.idle;
+    // 計時器在互動一開始就取消了，這裡只是保險：真的還在講話就不要冒出來
+    if (!mounted || idle == null || !idle.enabled) return;
+    if (_listening || _warmingUp || _pressing) return;
+
+    setState(() {
+      _pose = CharacterPose.scrolling;
+      _effect = StageEffect.none;
+      _draw = null;
+      _mishearAs = null;
+      _spokenShown = null;
+      _line = idle.lines[_random.nextInt(idle.lines.length)];
+    });
   }
 
   /// 啟動時的準備：讀設定檔、掃描角色素材
@@ -134,6 +181,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final telemetry = await SharedPrefsTelemetryStore.open();
     final assets = await resolveCharacterAssets();
     final identity = await _identityStore.load();
+    final memories = await _memoryStore.load();
     if (!mounted) return;
     setState(() {
       _config = config;
@@ -143,6 +191,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _identity = identity;
       _telemetryStore = telemetry;
       _uploader = TranscriptUploader(store: telemetry);
+      _memories = memories;
       _ready = true;
       if (identity.hasName) {
         _line = '${identity.name}在這裡～按住下面的按鈕，跟我說說話吧。';
@@ -158,6 +207,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
 
     unawaited(_uploader?.flush() ?? Future.value());
+    _restartIdleTimer();
   }
 
   // ── 按住說話 ──────────────────────────────────────────────
@@ -166,6 +216,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!_ready || _listening || _warmingUp) return;
     _pressing = true;
     _abortedBeforeListening = false;
+    _idleTimer?.cancel();
 
     setState(() {
       _warmingUp = true;
@@ -358,6 +409,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           if (mounted) _offerLanguagePack();
         });
       }
+      _restartIdleTimer();
       return;
     }
 
@@ -380,7 +432,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ) ??
         Future.value());
 
+    // 命中就記下這則回憶。remember() 對已經記得的回傳自己，
+    // 所以 identical 就是「這是不是第一次」，順便省掉重複寫檔。
+    final remembered = result.matched
+        ? _memories.remember(MemoryId.rule(rule.id))
+        : _memories;
+    final firstTime = !identical(remembered, _memories);
+
     setState(() {
+      _memories = remembered;
       _listening = false;
       _pose = characterPoseFromTrigger(rule.animationTrigger);
       _effect = rule.effect;
@@ -392,6 +452,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
 
     _afterInteraction();
+    if (firstTime) unawaited(_memoryStore.save(remembered));
+    _restartIdleTimer();
   }
 
   static bool _isLanguagePackError(String code) =>
@@ -412,6 +474,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _mishearAs = null;
       _spokenShown = null;
     });
+    _restartIdleTimer();
   }
 
   // ── 取名 ──────────────────────────────────────────────────
@@ -557,9 +620,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final config = _config;
     _identity = _identity.copyWith(name: name);
     await _identityStore.save(_identity);
+
+    // 有名字這件事本身是一則回憶。改名不會再記一次（remember 對已記得的
+    // 回傳自己），所以回憶簿上永遠只有「她有了名字」那一則。
+    final remembered = _memories.remember(MemoryId.naming);
+    if (!identical(remembered, _memories)) {
+      unawaited(_memoryStore.save(remembered));
+    }
     if (!mounted) return;
 
     setState(() {
+      _memories = remembered;
       _naming = false;
       _pose = CharacterPose.idle;
       _effect = StageEffect.none;
@@ -595,68 +666,27 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  // ── 玩法說明（順便當測試用的關鍵字清單）──────────────────
+  // ── 我們的回憶 ────────────────────────────────────────────
 
-  void _showHowToPlay() {
+  void _showAlbum() {
     final config = _config;
     if (config == null) return;
 
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('可以對她說…'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final rule in config.rules) ...[
-              Text(
-                rule.keywords.join('、'),
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              Text(
-                '→ 她會聽成「${rule.mishearAs}」，然後${rule.label}',
-                style: TextStyle(color: AppTheme.ink.withOpacity(0.7)),
-              ),
-              const SizedBox(height: 12),
-            ],
-            Text(
-              '其他內容她一律歪頭裝傻。',
-              style: TextStyle(color: AppTheme.ink.withOpacity(0.5), fontSize: 12),
-            ),
-            if (config.naming.keywords.isNotEmpty) ...[
-              const Divider(height: 24),
-              const Text(
-                '幫她取名',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '說「${config.naming.keywords.first}」，'
-                '或長按上面的「${_identity.displayName}」，都可以取名或改名。'
-                '${_identity.hasName ? '' : '不取名也完全玩得下去。'}',
-                style: TextStyle(
-                  fontSize: 11,
-                  height: 1.5,
-                  color: AppTheme.ink.withOpacity(0.6),
-                ),
-              ),
-            ],
-            const Divider(height: 24),
-            _diagnostics(),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('知道了'),
-          ),
-        ],
-      ),
+    showMemoryAlbum(
+      context,
+      entries: [
+        ...memoryEntriesForRules(config),
+        // 取名那一則只在設定檔真的有這段流程時才列——
+        // 列一則使用者根本碰不到的回憶只會讓人找不到路。
+        if (config.naming.keywords.isNotEmpty) namingMemoryEntry(_identity),
+      ],
+      memories: _memories,
+      diagnostics: _diagnostics(),
     );
   }
 
   /// 語音辨識診斷資訊。查「為什麼她聽不到」時看這裡，比翻 logcat 快。
+  /// 藏在回憶簿的長按之後，跟整本翻開同一個手勢。
   Widget _diagnostics() {
     final locales = _speech.availableLocales;
     final chinese = locales
@@ -763,10 +793,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             tooltip: '設定',
           ),
           IconButton(
-            onPressed: _ready ? _showHowToPlay : null,
-            icon: const Icon(Icons.help_outline),
+            onPressed: _ready ? _showAlbum : null,
+            icon: const Icon(Icons.menu_book_outlined),
             color: AppTheme.deepRose,
-            tooltip: '玩法',
+            tooltip: '我們的回憶',
           ),
         ],
       ),
