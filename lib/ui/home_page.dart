@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import '../core/app_config.dart';
 import '../core/app_theme.dart';
 import '../core/character_pose.dart';
-import '../data/mishear_discovery.dart';
+import '../data/memories.dart';
 import '../data/mishear_repository.dart';
 import '../data/mishear_rule.dart';
 import '../services/lottery_generator.dart';
@@ -16,7 +16,7 @@ import 'widgets/character_renderer.dart';
 import 'widgets/character_stage.dart';
 import 'widgets/dialogue_bubble.dart';
 import 'widgets/language_pack_sheet.dart';
-import 'widgets/mishear_codex.dart';
+import 'widgets/memory_album.dart';
 import 'widgets/notice_sheet.dart';
 import 'widgets/push_to_talk_button.dart';
 
@@ -32,13 +32,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final SpeechService _speech = SpeechService();
   final LotteryGenerator _lottery = LotteryGenerator();
   final MishearRepository _repository = MishearRepository();
-  final MishearDiscoveryStore _discoveryStore = MishearDiscoveryStore();
+  final MemoryStore _memoryStore = MemoryStore();
 
   MishearEngine? _engine;
   MishearConfig? _config;
 
-  /// 已經被觸發過的梗。梗圖鑑只攤開這些，其餘留謎面。
-  MishearDiscovery _discovery = MishearDiscovery.empty;
+  /// 兩個人之間已經發生過的事。回憶簿只寫下這些，其餘留一句曖昧的話。
+  Memories _memories = Memories.empty;
 
   /// 設定檔讀完了沒（讀完才允許按按鈕）
   bool _ready = false;
@@ -128,7 +128,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// 沒人理她夠久了，自己找事做。
   ///
   /// 這不是錯誤也不是裝傻，是她閒著——所以不能走 fallback 那條路，
-  /// 也不進梗圖鑑：被撞見的時候才有意思，列在清單上就變成一項功能說明了。
+  /// 也不進回憶簿：被撞見的時候才有意思，寫進去就變成一項功能說明了。
   void _goIdle() {
     final idle = _config?.idle;
     // 計時器在互動一開始就取消了，這裡只是保險：真的還在講話就不要冒出來
@@ -152,13 +152,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     final config = await _repository.load();
     final assets = await resolveCharacterAssets();
-    final discovery = await _discoveryStore.load();
+    final memories = await _memoryStore.load();
     if (!mounted) return;
     setState(() {
       _config = config;
       _engine = MishearEngine(config);
       _assets = assets;
-      _discovery = discovery;
+      _memories = memories;
       _ready = true;
     });
     _restartIdleTimer();
@@ -359,13 +359,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final result = engine.interpret(_transcript);
     final rule = result.rule;
 
-    // 命中就解鎖圖鑑那一筆。unlock() 對已解鎖的回傳自己，
-    // 所以 identical 就是「這輪是不是第一次發現」，順便省掉重複寫檔。
-    final unlocked = result.matched ? _discovery.unlock(rule.id) : _discovery;
-    final firstTime = !identical(unlocked, _discovery);
+    // 命中就記下這則回憶。remember() 對已經記得的回傳自己，
+    // 所以 identical 就是「這是不是第一次」，順便省掉重複寫檔。
+    final remembered = result.matched
+        ? _memories.remember(MemoryId.rule(rule.id))
+        : _memories;
+    final firstTime = !identical(remembered, _memories);
 
     setState(() {
-      _discovery = unlocked;
+      _memories = remembered;
       _listening = false;
       _pose = characterPoseFromTrigger(rule.animationTrigger);
       _effect = rule.effect;
@@ -376,7 +378,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _draw = rule.effect == StageEffect.lottery ? _lottery.draw() : null;
     });
 
-    if (firstTime) unawaited(_discoveryStore.save(unlocked));
+    if (firstTime) unawaited(_memoryStore.save(remembered));
     _restartIdleTimer();
   }
 
@@ -425,22 +427,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  // ── 梗圖鑑 ────────────────────────────────────────────────
+  // ── 我們的回憶 ────────────────────────────────────────────
 
-  void _showCodex() {
+  void _showAlbum() {
     final config = _config;
     if (config == null) return;
 
-    showMishearCodex(
+    // 取名那一則等取名功能進來之後追加：
+    //   entries: [...memoryEntriesForRules(config), namingMemoryEntry(_identity)]
+    // 現在先不放——列一則使用者還碰不到的回憶只會讓人找不到路。
+    showMemoryAlbum(
       context,
-      config: config,
-      discovery: _discovery,
+      entries: memoryEntriesForRules(config),
+      memories: _memories,
       diagnostics: _diagnostics(),
     );
   }
 
   /// 語音辨識診斷資訊。查「為什麼她聽不到」時看這裡，比翻 logcat 快。
-  /// 藏在梗圖鑑的長按之後，跟整本翻開同一個手勢。
+  /// 藏在回憶簿的長按之後，跟整本翻開同一個手勢。
   Widget _diagnostics() {
     final locales = _speech.availableLocales;
     final chinese = locales
@@ -532,10 +537,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
           const Spacer(),
           IconButton(
-            onPressed: _ready ? _showCodex : null,
+            onPressed: _ready ? _showAlbum : null,
             icon: const Icon(Icons.menu_book_outlined),
             color: AppTheme.deepRose,
-            tooltip: '梗圖鑑',
+            tooltip: '我們的回憶',
           ),
         ],
       ),

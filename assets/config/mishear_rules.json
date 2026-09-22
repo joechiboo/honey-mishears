@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_readme": "諧音梗設定檔。要新增一個梗，只要在 rules 陣列加一筆即可，不需要改任何程式碼。effect 目前支援 none / dust / lottery；animationTrigger 必須對應 Rive 狀態機裡的 Trigger 名稱（素材未完成時會由佔位角色模擬）。hint 是梗圖鑑在「還沒被觸發」時顯示的謎面：要指得到路，但不能把諧音講破，否則圖鑑就退回答案本了。",
+  "_readme": "諧音梗設定檔。要新增一個梗，只要在 rules 陣列加一筆即可，不需要改任何程式碼。effect 目前支援 none / dust / lottery；animationTrigger 必須對應 Rive 狀態機裡的 Trigger 名稱（素材未完成時會由佔位角色模擬）。hint 是這則回憶「還沒發生」時顯示的那句話：要指得到路，但不能把諧音講破，否則回憶簿就退回答案本了。",
   "fallback": {
     "id": "confused",
     "label": "聽不懂",

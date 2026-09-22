@@ -117,7 +117,7 @@ void main() {
             reason: '${rule.id} 的台詞不足 3 句');
       }
 
-      // 每條梗都要有謎面，否則它在圖鑑裡會退回一句沒資訊的場面話，
+      // 每條梗都要有 hint，否則它在回憶簿上會退回一句沒資訊的場面話，
       // 使用者根本猜不到該說什麼——新增梗時最容易漏掉的就是這欄。
       for (final rule in config.rules) {
         expect(rule.hint, isNotEmpty, reason: '${rule.id} 沒寫 hint');
