@@ -24,12 +24,20 @@ class SpeechService {
 
   bool _initialized = false;
   String? _localeId;
+  List<String> _availableLocales = const [];
+  String? _lastError;
 
   bool get isInitialized => _initialized;
   bool get isListening => _speech.isListening;
 
   /// 目前使用的辨識語系（除錯用）
   String? get localeId => _localeId;
+
+  /// 這台裝置的辨識服務回報支援的語系清單（診斷畫面用）
+  List<String> get availableLocales => _availableLocales;
+
+  /// 最後一次辨識錯誤代碼，例如 error_language_unavailable
+  String? get lastError => _lastError;
 
   /// 要求麥克風權限。
   /// 注意：Android 上如果使用者已經永久拒絕，request() 會直接回 permanentlyDenied，
@@ -59,7 +67,10 @@ class SpeechService {
 
     _initialized = await _speech.initialize(
       onStatus: (status) => onStatus?.call(status),
-      onError: (error) => onError?.call(error.errorMsg),
+      onError: (error) {
+        _lastError = error.errorMsg;
+        onError?.call(error.errorMsg);
+      },
       debugLogging: kDebugMode,
     );
 
@@ -69,21 +80,31 @@ class SpeechService {
     return _initialized;
   }
 
-  /// 挑一個中文語系；找不到就交給系統預設（回傳 null）
+  /// 挑辨識語系。
+  ///
+  /// 原本寫「取第一個 zh 開頭的」會誤中 zh-CN；改成依偏好順序精準挑：
+  /// 台灣中文 → 任何繁中 → 任何中文 → 交給系統預設（null）。
   Future<String?> _resolveLocaleId() async {
     try {
       final locales = await _speech.locales();
-      for (final locale in locales) {
-        final id = locale.localeId.toLowerCase();
-        if (id.startsWith(AppConfig.preferredLocalePrefixes) ||
-            id.startsWith('cmn')) {
-          return locale.localeId;
+      _availableLocales = locales.map((l) => l.localeId).toList();
+
+      String? firstWhere(bool Function(String id) test) {
+        for (final locale in locales) {
+          if (test(locale.localeId.toLowerCase().replaceAll('-', '_'))) {
+            return locale.localeId;
+          }
         }
+        return null;
       }
+
+      return firstWhere((id) => id == 'zh_tw' || id == 'cmn_hant_tw') ??
+          firstWhere((id) => id.contains('tw') || id.contains('hant')) ??
+          firstWhere((id) => id.startsWith('zh') || id.startsWith('cmn'));
     } catch (_) {
-      // 某些裝置查詢語系會失敗，忽略即可
+      // 某些裝置查詢語系會失敗，交給系統預設
+      return null;
     }
-    return null;
   }
 
   /// 開始收音。[onResult] 會被呼叫多次（逐字結果），isFinal=true 是最終結果。
@@ -92,6 +113,7 @@ class SpeechService {
     ValueChanged<double>? onSoundLevel,
   }) async {
     if (!_initialized) return;
+    _lastError = null;
 
     await _speech.listen(
       onResult: (SpeechRecognitionResult result) {

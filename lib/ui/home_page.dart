@@ -10,11 +10,11 @@ import '../data/mishear_rule.dart';
 import '../services/lottery_generator.dart';
 import '../services/mishear_engine.dart';
 import '../services/speech_service.dart';
+import 'widgets/character_renderer.dart';
 import 'widgets/character_stage.dart';
 import 'widgets/dialogue_bubble.dart';
 import 'widgets/notice_sheet.dart';
 import 'widgets/push_to_talk_button.dart';
-import 'widgets/rive_character.dart';
 
 /// 主畫面：角色區 + 台詞對話框 + 按住說話按鈕
 class HomePage extends StatefulWidget {
@@ -35,8 +35,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// 設定檔讀完了沒（讀完才允許按按鈕）
   bool _ready = false;
 
-  /// Rive 素材是否存在；沒有就用佔位角色
-  bool _useRive = false;
+  /// 掃描到的角色素材：Rive > 圖片 > 佔位角色
+  CharacterAssets _assets = CharacterAssets.placeholderOnly;
 
   // ── 畫面狀態 ──────────────────────────────────────────────
   CharacterPose _pose = CharacterPose.idle;
@@ -57,6 +57,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   String _transcript = '';
   Timer? _finalTimer;
+
+  /// 這一輪辨識引擎回報的錯誤代碼；有值代表「不是聽不懂，是根本沒辨識成功」
+  String? _sttError;
 
   @override
   void initState() {
@@ -86,15 +89,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  /// 啟動時的準備：讀設定檔、確認 Rive 素材在不在
+  /// 啟動時的準備：讀設定檔、掃描角色素材
   Future<void> _bootstrap() async {
     final config = await _repository.load();
-    final useRive = await isRiveAssetAvailable();
+    final assets = await resolveCharacterAssets();
     if (!mounted) return;
     setState(() {
       _config = config;
       _engine = MishearEngine(config);
-      _useRive = useRive;
+      _assets = assets;
       _ready = true;
     });
   }
@@ -117,7 +120,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // 2. 初始化辨識引擎（第一次按才做，避免一開 App 就跳權限）
     final available = await _speech.initialize(
       onStatus: (status) => debugPrint('[STT] status=$status'),
-      onError: (message) => debugPrint('[STT] error=$message'),
+      onError: _onSpeechError,
     );
     if (!mounted) return;
     if (!available) {
@@ -134,6 +137,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     // 3. 開始收音
     _transcript = '';
+    _sttError = null;
     _resolved = false;
     setState(() {
       _listening = true;
@@ -184,6 +188,43 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  /// 辨識引擎回報錯誤。
+  ///
+  /// 這條路徑一定要跟「聽不懂」分開：引擎報錯時我們根本沒拿到任何文字，
+  /// 卻讓角色歪頭裝傻的話，畫面上跟「有聽到但沒命中關鍵字」長得一模一樣，
+  /// 使用者（和我們自己）會往錯的方向查。
+  void _onSpeechError(String message) {
+    debugPrint('[STT] error=$message');
+    _sttError = message;
+
+    // 錯誤發生時不會再有最終結果，直接結算
+    if (!_resolved) {
+      _speech.cancel();
+      _resolve();
+    }
+  }
+
+  /// 把引擎的錯誤代碼翻成人看得懂的話
+  static String _describeSttError(String code) {
+    switch (code) {
+      case 'error_language_unavailable':
+      case 'error_language_not_supported':
+        return '這台手機的語音辨識沒有中文語言包，所以它直接拒絕辨識。';
+      case 'error_no_match':
+      case 'error_speech_timeout':
+        return '有在聽，但沒聽到聽得懂的內容。';
+      case 'error_network':
+      case 'error_network_timeout':
+        return '辨識服務要連網，但連不上。';
+      case 'error_audio':
+        return '收音失敗，麥克風可能被其他 App 佔用。';
+      case 'error_busy':
+        return '辨識服務忙碌中，稍等一下再試。';
+      default:
+        return '辨識服務回報錯誤。';
+    }
+  }
+
   /// 結算這一輪：比對關鍵字 → 切換動畫與台詞
   void _resolve() {
     if (_resolved) return;
@@ -194,6 +235,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     final engine = _engine;
     if (engine == null || !mounted) return;
+
+    // 引擎報錯而且什麼都沒聽到 → 誠實說壞了，不要假裝在裝傻
+    final error = _sttError;
+    if (error != null && _transcript.isEmpty) {
+      setState(() {
+        _listening = false;
+        _pose = CharacterPose.confused;
+        _effect = StageEffect.none;
+        _draw = null;
+        _mishearAs = null;
+        _line = _describeSttError(error);
+        _spokenShown = '辨識錯誤：$error';
+      });
+      return;
+    }
 
     final result = engine.interpret(_transcript);
     final rule = result.rule;
@@ -263,6 +319,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               '其他內容她一律歪頭裝傻。',
               style: TextStyle(color: AppTheme.ink.withOpacity(0.5), fontSize: 12),
             ),
+            const Divider(height: 24),
+            _diagnostics(),
           ],
         ),
         actions: [
@@ -272,6 +330,35 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
         ],
       ),
+    );
+  }
+
+  /// 語音辨識診斷資訊。查「為什麼她聽不到」時看這裡，比翻 logcat 快。
+  Widget _diagnostics() {
+    final locales = _speech.availableLocales;
+    final chinese = locales
+        .where((l) => l.toLowerCase().startsWith('zh') || l.toLowerCase().startsWith('cmn'))
+        .toList();
+
+    final lines = <String>[
+      '辨識引擎：${_speech.isInitialized ? '已初始化' : '尚未初始化（按一次說話鈕）'}',
+      '使用語系：${_speech.localeId ?? '系統預設'}',
+      '可用語系：${locales.length} 個'
+          '${chinese.isEmpty ? '，其中沒有任何中文' : '，中文有 ${chinese.join('、')}'}',
+      if (_speech.lastError != null) '最後錯誤：${_speech.lastError}',
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('語音診斷', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+        const SizedBox(height: 4),
+        for (final line in lines)
+          Text(
+            line,
+            style: TextStyle(fontSize: 11, height: 1.5, color: AppTheme.ink.withOpacity(0.6)),
+          ),
+      ],
     );
   }
 
@@ -288,7 +375,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 child: CharacterStage(
                   pose: _pose,
                   effect: _effect,
-                  useRive: _useRive,
+                  assets: _assets,
                   lotteryDraw: _draw,
                 ),
               ),
