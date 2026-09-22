@@ -38,6 +38,10 @@ dependencies:
   speech_to_text: ^6.6.2
   rive: ^0.13.20
   permission_handler: ^11.3.1
+  # 存她的名字與互動次數，以及逐字稿回傳的同意設定與待送佇列
+  shared_preferences: ^2.2.3
+  # 逐字稿回傳。Supabase 走 PostgREST，用 HTTP 打就夠，不必加 SDK
+  http: ^1.2.1
 
 dev_dependencies:
   flutter_test:

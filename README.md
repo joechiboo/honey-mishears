@@ -26,6 +26,10 @@ App 名稱：**AI 老婆**
 **回應邏輯完全離線、不使用任何語言模型**：語音轉文字後純粹做關鍵字字串比對。
 （語音轉文字本身依賴系統的辨識服務與語言包，見下方〈語音辨識〉。）
 
+> ⚠️ 但 App **不是什麼都不出去**：辨識完的文字會回傳，用來找出她聽不懂的話。
+> 沒有錄音、沒有她的名字，預設開啟且隨時可關。收什麼、怎麼關、Play 表單怎麼填，
+> 見 [`docs/telemetry.md`](docs/telemetry.md)。
+
 ---
 
 ## 技術規格
@@ -60,6 +64,8 @@ honey-mishears/
 │   │   ├── app_theme.dart       配色
 │   │   └── character_pose.dart  角色姿勢 enum ↔ Rive trigger 名稱
 │   ├── data/
+│   │   ├── telemetry_store.dart     回傳的同意設定與待送佇列
+│   │   ├── transcript_record.dart   一筆回傳紀錄（刻意不含什麼，看它的註解）
 │   │   ├── mishear_rule.dart        設定檔的資料模型
 │   │   └── mishear_repository.dart  讀 JSON
 │   ├── services/
@@ -150,6 +156,8 @@ flutter build apk --release
 
 - **回應邏輯**完全離線：純字串比對，沒有模型、沒有 API 呼叫
 - **語音轉文字**交給 Android 系統的辨識服務，需要對應的**語言包**
+- **辨識完的文字會回傳**（預設開、可關）：只有文字，沒有音檔。
+  這是唯一會主動連外的地方，見 [`docs/telemetry.md`](docs/telemetry.md)
 
 實測 Galaxy S23（API 36）：出廠狀態 `installed: []`，**一個離線語言包都沒有**，
 而且 `online: []`——這台機器沒有「連網就能辨識」的退路。所以第一次使用一定會失敗，
@@ -203,13 +211,24 @@ adb shell am force-stop com.google.android.as
 3. **打包 AAB**
 
    ```bash
-   flutter build appbundle --release
+   flutter build appbundle --release \
+     --dart-define=SUPABASE_URL=https://xxxx.supabase.co \
+     --dart-define=SUPABASE_ANON_KEY=eyJhbGciOi... \
+     --dart-define=APP_VERSION=1.0.0
    # 產物：build/app/outputs/bundle/release/app-release.aab
    ```
 
+   金鑰走 `--dart-define` 而不是寫進檔案，因為這個 repo 是公開的。
+   **沒帶就不會回傳任何東西**，這是刻意的預設。
+
 4. **Play Console 需要準備的資料**
-   - 資料安全性表單：勾選「錄音」用途為**應用程式功能**，並註明
-     *不上傳、不儲存*（本 App 只把語音交給系統辨識服務轉文字）
+   - 資料安全性表單有兩塊要分開填：
+     - **錄音**：用途為應用程式功能，且註明*不上傳、不儲存*
+       （音檔確實沒有離開裝置，只交給系統辨識服務轉文字）
+     - **使用者產生的內容**：**有蒐集**——辨識完的逐字稿會回傳。
+       選用（可關）、加密傳輸、傳給第三方（Supabase）。
+       逐欄怎麼填見 [`docs/telemetry.md`](docs/telemetry.md) 第五節
+   - **隱私政策**：有了逐字稿回傳之後這是必填欄位，不再是選配
    - 內容分級問卷：明牌畫面屬**模擬博弈相關的娛樂內容**，
      務必如實填寫「不涉及真實金錢」
    - 明牌畫面已內建聲明：「僅供娛樂，號碼為電腦隨機產生，不具任何預測性，
