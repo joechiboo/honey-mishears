@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 對應 lib/core/app_theme.dart 的 AppTheme.cream，
+         讓啟動畫面跟 Flutter 畫出來的第一幀是同一個底色，中間不會閃白。 -->
+    <color name="launch_background">#FFF6F0</color>
+</resources>
