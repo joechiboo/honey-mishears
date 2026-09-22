@@ -38,5 +38,8 @@
 
 不要今天生兩張、明天補三張——中間換了模型或 prompt，臉就不是同一個人了。
 
+可以直接複製貼上的六張 prompt 見
+[`docs/character_prompts.md`](../../../docs/character_prompts.md)。
+
 完整的形象路線（為什麼不即時生圖、捏人系統要怎麼做）見
 [`docs/character_art_roadmap.md`](../../../docs/character_art_roadmap.md)。
