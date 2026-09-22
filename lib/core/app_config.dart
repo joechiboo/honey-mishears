@@ -5,8 +5,10 @@ class AppConfig {
   /// App 顯示名稱
   static const String appName = 'AI 老婆';
 
-  /// 語音辨識偏好語系。找不到時會退回系統預設語系。
-  static const String preferredLocalePrefixes = 'zh';
+  /// 語音辨識偏好語系（BCP-47）。
+  /// 實際送給辨識器的字串會改用裝置自己的寫法（例如 cmn-Hant-TW），
+  /// 見 SpeechService._resolveLocaleId。
+  static const String preferredLocale = 'zh-TW';
 
   /// 是否強制只用「裝置端離線辨識」。
   ///

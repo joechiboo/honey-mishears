@@ -4,6 +4,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 
 import '../core/app_config.dart';
+import 'speech_model_service.dart';
 
 /// 麥克風權限狀態（簡化成 UI 真正需要分辨的幾種）
 enum MicPermission {
@@ -21,6 +22,7 @@ enum MicPermission {
 /// UI 只需要 requestPermission / start / stop 三個動作。
 class SpeechService {
   final SpeechToText _speech = SpeechToText();
+  final SpeechModelService _models = SpeechModelService();
 
   bool _initialized = false;
   String? _localeId;
@@ -76,15 +78,30 @@ class SpeechService {
 
     if (_initialized) {
       _localeId = await _resolveLocaleId();
+      debugPrint('[STT] 送給辨識器的語系 = $_localeId');
     }
     return _initialized;
   }
 
   /// 挑辨識語系。
   ///
-  /// 原本寫「取第一個 zh 開頭的」會誤中 zh-CN；改成依偏好順序精準挑：
-  /// 台灣中文 → 任何繁中 → 任何中文 → 交給系統預設（null）。
+  /// ⚠️ 這裡踩過兩個坑，順序不能顛倒：
+  ///
+  /// 1. speech_to_text 回報的寫法是 `zh_TW`（底線），但 Android 的裝置端辨識器
+  ///    自己把台灣中文叫 `cmn-Hant-TW`。送 `zh_TW` 進去它解析不了，會**安靜地**
+  ///    退回預設語系 en-US，然後因為 en-US 的語言包沒裝而報
+  ///    LANGUAGE_PACK_ERROR——錯誤訊息完全指不到真正的原因。
+  /// 2. 所以語系寫法要以**辨識器自己的已安裝模型清單**為準，
+  ///    speech_to_text 的清單只能當退路。
   Future<String?> _resolveLocaleId() async {
+    // 第一順位：辨識器已經裝好的中文模型，用它自己的寫法
+    final support = await _models.check(AppConfig.preferredLocale);
+    final installedTag = support.deviceTagFor(AppConfig.preferredLocale);
+    if (installedTag != null && support.isInstalled(AppConfig.preferredLocale)) {
+      return installedTag;
+    }
+
+    // 退路：從 speech_to_text 的清單挑，並把底線換成連字號
     try {
       final locales = await _speech.locales();
       _availableLocales = locales.map((l) => l.localeId).toList();
@@ -92,7 +109,7 @@ class SpeechService {
       String? firstWhere(bool Function(String id) test) {
         for (final locale in locales) {
           if (test(locale.localeId.toLowerCase().replaceAll('-', '_'))) {
-            return locale.localeId;
+            return locale.localeId.replaceAll('_', '-');
           }
         }
         return null;
@@ -102,7 +119,6 @@ class SpeechService {
           firstWhere((id) => id.contains('tw') || id.contains('hant')) ??
           firstWhere((id) => id.startsWith('zh') || id.startsWith('cmn'));
     } catch (_) {
-      // 某些裝置查詢語系會失敗，交給系統預設
       return null;
     }
   }
