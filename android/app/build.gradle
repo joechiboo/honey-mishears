@@ -37,7 +37,8 @@ android {
     namespace "com.joechiboo.honey_mishears"
     // Google Play 規定新版本必須以 API 34 以上為目標
     compileSdk 34
-    ndkVersion flutter.ndkVersion
+    // rive_common 的原生程式庫要求比 Flutter 預設更高的 NDK
+    ndkVersion "25.1.8937393"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
