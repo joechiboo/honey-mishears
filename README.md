@@ -22,7 +22,8 @@ App 名稱：**AI 老婆**
 
 每個情境都有 3 句台詞隨機挑選，避免重複感。
 
-**完全離線、不使用任何語言模型**：語音轉文字後純粹做關鍵字字串比對。
+**回應邏輯完全離線、不使用任何語言模型**：語音轉文字後純粹做關鍵字字串比對。
+（語音轉文字本身依賴系統的辨識服務與語言包，見下方〈語音辨識〉。）
 
 ---
 
@@ -32,7 +33,8 @@ App 名稱：**AI 老婆**
 |---|---|
 | 框架 | Flutter 3.19（Android 優先） |
 | 角色動畫 | Rive 狀態機（素材未完成時走純 Flutter 佔位角色） |
-| 語音辨識 | `speech_to_text`，按住說話 |
+| 語音辨識 | `speech_to_text`，按住說話（系統辨識服務 + 語言包） |
+| 語言包 | 自訂 platform channel，App 內引導下載 |
 | 權限 | `permission_handler` |
 | 回應邏輯 | 語音轉文字 → 關鍵字比對 → 觸發動畫與台詞 |
 
@@ -61,6 +63,7 @@ honey-mishears/
 │   │   └── mishear_repository.dart  讀 JSON
 │   ├── services/
 │   │   ├── speech_service.dart      語音辨識 + 麥克風權限
+│   │   ├── speech_model_service.dart 語言包查詢／下載（接 platform channel）
 │   │   ├── mishear_engine.dart      關鍵字比對引擎
 │   │   └── lottery_generator.dart   隨機號碼
 │   └── ui/
@@ -76,8 +79,12 @@ honey-mishears/
 │           ├── push_to_talk_button.dart   按住說話按鈕
 │           ├── dust_effect.dart           灰塵特效
 │           ├── lottery_card.dart          明牌號碼卡（含娛樂性質聲明）
-│           └── notice_sheet.dart          權限／錯誤提示面板
+│           ├── notice_sheet.dart          權限／錯誤提示面板
+│           └── language_pack_sheet.dart   語言包下載引導（五個狀態）
 └── android/
+    └── app/src/main/kotlin/.../SpeechModelBridge.kt
+                                     語言包 API 的 platform channel
+                                     （speech_to_text 沒有包這組 API）
 ```
 
 ---
@@ -131,17 +138,41 @@ flutter build apk --release
 
 ---
 
-## 語音辨識是不是真的離線？
+## 語音辨識
 
-分兩層看：
+**分兩層看**：
 
-- **回應邏輯**完全離線：純字串比對，沒有任何模型、沒有任何 API 呼叫。
-- **語音轉文字**預設交給 Android 系統服務決定，多數手機會走 Google 的線上辨識。
+- **回應邏輯**完全離線：純字串比對，沒有模型、沒有 API 呼叫
+- **語音轉文字**交給 Android 系統的辨識服務，需要對應的**語言包**
 
-要強制完全不連網，把 `lib/core/app_config.dart` 的
-`forceOnDeviceRecognition` 改成 `true`——但使用者必須先在
-**設定 → 系統 → 語言與輸入 → 語音辨識** 下載中文離線語音包，
-否則辨識會直接失敗。MVP 階段先維持 `false` 確保流程跑得通。
+實測 Galaxy S23（API 36）：出廠狀態 `installed: []`，**一個離線語言包都沒有**，
+而且 `online: []`——這台機器沒有「連網就能辨識」的退路。所以第一次使用一定會失敗，
+必須先下載語言包。
+
+App 因此內建了**語言包下載引導**：偵測到 `error_language_unavailable` 時會自動
+彈出面板，Android 13+ 可以直接在 App 內按一鍵下載（`triggerModelDownload`），
+不必叫使用者自己去翻系統設定。
+
+> ⚠️ **接手前必讀**：[`docs/speech_recognition.md`](docs/speech_recognition.md)
+>
+> 這條線有四個坑，而且**每一個的錯誤訊息都指向錯誤的方向**。最容易中的是：
+> 裝置把台灣中文叫 `cmn-Hant-TW`，不叫 `zh-TW`；送錯寫法它會**安靜地**退回
+> en-US，然後報一個看起來像「中文沒裝好」的錯。
+
+### 除錯
+
+App 右上角 **❓ → 語音診斷** 會顯示引擎狀態、實際送出的語系、可用語系與最後錯誤碼。
+
+```bash
+adb logcat -c    # 測之前清空
+adb logcat -d | grep -aE "Soda|\[STT\]|\[LangPack\]"
+```
+
+辨識器卡在 `error_busy` 且重開 App 無效時（獨占資源沒放乾淨）：
+
+```bash
+adb shell am force-stop com.google.android.as
+```
 
 ---
 
