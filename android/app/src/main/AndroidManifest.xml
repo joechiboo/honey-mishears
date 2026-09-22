@@ -1,7 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- 語音辨識需要麥克風 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-    <!-- Android 預設的語音辨識服務多半走網路；若之後改成強制離線辨識可移除 -->
+    <!-- 兩個用途，缺一不可：
+         1. Android 預設的語音辨識服務多半走網路
+         2. 逐字稿回傳（見 docs/telemetry.md）
+         就算之後改成強制離線辨識，也**不能**移除這一行——2 還在。 -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
     <application

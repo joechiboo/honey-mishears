@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/app_theme.dart';
 import '../../core/telemetry_config.dart';
@@ -174,6 +175,55 @@ class _TelemetrySheetState extends State<TelemetrySheet> {
                 ],
               ),
             ),
+
+          const Divider(height: 24),
+
+          // 識別碼要看得到也複製得走：隱私政策承諾「可以要求刪除自己的紀錄」，
+          // 而我們刻意不收任何能識別身分的東西，所以這串是唯一的憑據。
+          // 政策上寫得到、App 裡拿不到，那個承諾就是空的。
+          Text(
+            '這台裝置的識別碼',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppTheme.ink.withOpacity(0.6),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.store.deviceId,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: '複製',
+                icon: const Icon(Icons.copy_outlined, size: 18),
+                onPressed: () async {
+                  // messenger 先抓好再 await：await 之後這個 context
+                  // 可能已經不在樹上了
+                  final messenger = ScaffoldMessenger.of(context);
+                  await Clipboard.setData(
+                      ClipboardData(text: widget.store.deviceId));
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('識別碼已複製')),
+                  );
+                },
+              ),
+            ],
+          ),
+          Text(
+            '要求刪除自己的紀錄時附上這串即可。清除 App 資料會換一組新的。',
+            style: TextStyle(
+              fontSize: 11,
+              color: AppTheme.ink.withOpacity(0.5),
+            ),
+          ),
 
           const SizedBox(height: 12),
           Row(
