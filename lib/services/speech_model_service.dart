@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// 語言包在這台裝置上的狀況
@@ -47,17 +50,62 @@ class SpeechModelSupport {
     online: [],
   );
 
-  /// 語系比對：zh-TW / zh_TW / cmn-Hant-TW 都要視為同一件事，
-  /// 所以拿掉分隔符號後比前綴。
-  static String _key(String locale) =>
-      locale.toLowerCase().replaceAll(RegExp(r'[-_]'), '');
+  /// 語系比對。
+  ///
+  /// ⚠️ 這裡踩過坑：裝置把台灣中文叫做 **cmn-Hant-TW**，而 speech_to_text
+  /// 回報的是 **zh_TW**。原本用「去掉符號後比前綴」的偷懶寫法，
+  /// zhtw 對不上 cmnhanttw，於是把「可以下載」誤判成「不支援中文」，
+  /// UI 還很有自信地把這個錯誤結論告訴使用者。
+  ///
+  /// 正解是拆成 語言/文字/地區 三段比：zh 與 cmn 是同一個語言的兩種寫法，
+  /// 缺的那一段（例如 zh_TW 沒有寫 Hant）視為通配，不能當成不相等。
+  static _LocaleKey _parse(String tag) {
+    final parts = tag.toLowerCase().replaceAll('_', '-').split('-')
+      ..removeWhere((p) => p.isEmpty);
+    if (parts.isEmpty) return const _LocaleKey('', null, null);
 
-  static bool _match(List<String> list, String locale) {
-    final target = _key(locale);
-    return list.any((l) {
-      final k = _key(l);
-      return k == target || k.startsWith(target) || target.startsWith(k);
-    });
+    // zh 與 cmn（Mandarin）指的是同一個語言
+    var lang = parts.first;
+    if (lang == 'zh') lang = 'cmn';
+
+    String? script;
+    String? region;
+    for (final part in parts.skip(1)) {
+      if (part.length == 4) {
+        script = part; // hant / hans
+      } else if (part.length == 2 || part.length == 3) {
+        region = part; // tw / cn / us
+      }
+    }
+    return _LocaleKey(lang, script, region);
+  }
+
+  static bool _sameLocale(String a, String b) {
+    final x = _parse(a);
+    final y = _parse(b);
+    if (x.lang != y.lang) return false;
+    // 任一方沒寫的段落視為通配
+    if (x.region != null && y.region != null && x.region != y.region) {
+      return false;
+    }
+    if (x.script != null && y.script != null && x.script != y.script) {
+      return false;
+    }
+    return true;
+  }
+
+  static bool _match(List<String> list, String locale) =>
+      list.any((l) => _sameLocale(l, locale));
+
+  /// 回傳裝置自己用的那個寫法（例如給 zh_TW 會拿到 cmn-Hant-TW）。
+  /// 下載與辨識都要用裝置的寫法，不要用我們以為的寫法。
+  String? deviceTagFor(String locale) {
+    for (final list in [installed, pending, supported]) {
+      for (final tag in list) {
+        if (_sameLocale(tag, locale)) return tag;
+      }
+    }
+    return null;
   }
 
   bool isInstalled(String locale) => _match(installed, locale);
@@ -91,6 +139,14 @@ class SpeechModelSupport {
       errorCode: (map['errorCode'] as num?)?.toInt(),
     );
   }
+}
+
+/// 語系的三段結構：語言 / 文字 / 地區
+class _LocaleKey {
+  const _LocaleKey(this.lang, this.script, this.region);
+  final String lang;
+  final String? script;
+  final String? region;
 }
 
 /// 下載過程回報的事件
@@ -131,19 +187,29 @@ class SpeechModelService {
       EventChannel('honey_mishears/speech_model_events');
 
   /// 下載進度事件流
-  Stream<ModelDownloadEvent> get downloadEvents => _events
-      .receiveBroadcastStream()
-      .map((e) => ModelDownloadEvent.fromMap(e as Map<Object?, Object?>));
+  Stream<ModelDownloadEvent> get downloadEvents =>
+      _events.receiveBroadcastStream().map((e) {
+        debugPrint('[LangPack] event $e');
+        return ModelDownloadEvent.fromMap(e as Map<Object?, Object?>);
+      });
 
   Future<SpeechModelSupport> check(String locale) async {
     try {
-      final raw = await _method.invokeMethod<Map<Object?, Object?>>(
-        'check',
-        {'locale': locale},
-      );
+      // 這支 API 的 callback 有可能不回來，加逾時避免 UI 卡在「檢查中」
+      final raw = await _method
+          .invokeMethod<Map<Object?, Object?>>('check', {'locale': locale})
+          .timeout(const Duration(seconds: 8));
+
+      // 查這類問題時，裝置回報的原始清單比任何推測都有用，直接印出來
+      debugPrint('[LangPack] check($locale) -> $raw');
+
       if (raw == null) return SpeechModelSupport.unknown;
       return SpeechModelSupport.fromMap(raw);
-    } on PlatformException {
+    } on TimeoutException {
+      debugPrint('[LangPack] check($locale) 逾時，callback 沒回來');
+      return SpeechModelSupport.unknown;
+    } on PlatformException catch (e) {
+      debugPrint('[LangPack] check($locale) 失敗：$e');
       return SpeechModelSupport.unknown;
     } on MissingPluginException {
       // 非 Android 平台
@@ -158,6 +224,7 @@ class SpeechModelService {
         'download',
         {'locale': locale},
       );
+      debugPrint('[LangPack] download($locale) -> $raw');
       return raw?['scheduled'] == true;
     } on PlatformException {
       return false;

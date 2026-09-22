@@ -49,6 +49,10 @@ class _LanguagePackSheetState extends State<_LanguagePackSheet> {
   int? _percent;
   String _blockedReason = '';
 
+  /// 裝置自己對這個語言的寫法（例如 cmn-Hant-TW）。
+  /// 下載一定要用它，用我們以為的 zh_TW 系統不認得。
+  String? _deviceTag;
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +70,8 @@ class _LanguagePackSheetState extends State<_LanguagePackSheet> {
     if (!mounted) return;
 
     setState(() {
+      _deviceTag = support.deviceTagFor(widget.locale);
+
       if (support.isInstalled(widget.locale)) {
         _phase = _Phase.done;
       } else if (support.isPending(widget.locale)) {
@@ -85,8 +91,8 @@ class _LanguagePackSheetState extends State<_LanguagePackSheet> {
         _blockedReason = '查詢語音包狀態失敗（錯誤碼 ${support.errorCode}）。';
       } else {
         _phase = _Phase.blocked;
-        _blockedReason = '這台裝置的離線語音辨識不支援中文，下載也沒有用。'
-            '可用的離線語言：${support.installed.isEmpty ? '（無）' : support.installed.join('、')}';
+        _blockedReason = '這台裝置的離線語音辨識不支援 ${widget.locale}，下載也沒有用。\n'
+            '它支援的語言：${support.supported.isEmpty ? '（無）' : support.supported.join('、')}';
       }
     });
   }
@@ -116,7 +122,7 @@ class _LanguagePackSheetState extends State<_LanguagePackSheet> {
       }
     });
 
-    final scheduled = await _service.download(widget.locale);
+    final scheduled = await _service.download(_deviceTag ?? widget.locale);
     if (!mounted) return;
     if (!scheduled) {
       setState(() {
