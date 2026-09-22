@@ -74,10 +74,20 @@ Any State ──[confuse]─▶ Confused
 
 ---
 
-## 五、目前的替代方案
+## 五、Rive 之前的兩層替代方案
 
-Rive 素材完成前，App 使用 `lib/ui/widgets/placeholder_character.dart`：
-純 Flutter 圖形畫的簡易角色，吃同一組 `CharacterPose`。
+App 有三種渲染器，啟動時掃素材決定用誰，三者吃同一組 `CharacterPose`：
+
+| 優先序 | 渲染器 | 條件 | 表現 |
+|---|---|---|---|
+| 1 | Rive | `assets/rive/wife.riv` 存在 | 完整動畫，本文件規格 |
+| 2 | 圖片 | `assets/character/default/idle.png` 存在 | 一個姿勢一張靜態圖，只有呼吸與歪頭 |
+| 3 | 佔位角色 | 永遠可用的保底 | 純 Flutter 圖形 |
+
+**`wife.riv` 一放進去就是最優先**，會蓋過圖片角色，不必先把圖刪掉。
+判斷邏輯在 `lib/ui/widgets/character_renderer.dart`。
+
+佔位角色（`placeholder_character.dart`）各姿勢的表現，可以拿來當分鏡參考：
 
 | CharacterPose | 佔位角色的表現 |
 |---|---|
@@ -88,8 +98,8 @@ Rive 素材完成前，App 使用 `lib/ui/widgets/placeholder_character.dart`：
 | `mask` | 整臉蓋綠泥 + 兩片小黃瓜 |
 | `confused` | 固定歪頭 + ❓ emoji |
 
-切換方式：把 `wife.riv` 放進 `assets/rive/` 即可，程式啟動時會自動偵測
-（`isRiveAssetAvailable()`），不必改設定。
+> 呼吸與歪頭是 `character_motion.dart` 套在外面的，圖片角色也吃這一套。
+> **Rive 角色不吃**——動作全由狀態機自己負責，不會被外面再轉一次。
 
 ---
 
