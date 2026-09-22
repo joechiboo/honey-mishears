@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_readme": "諧音梗設定檔。要新增一個梗，只要在 rules 陣列加一筆即可，不需要改任何程式碼。effect 目前支援 none / dust / lottery；animationTrigger 必須對應 Rive 狀態機裡的 Trigger 名稱（素材未完成時會由佔位角色模擬）。",
+  "_readme": "諧音梗設定檔。要新增一個梗，只要在 rules 陣列加一筆即可，不需要改任何程式碼。effect 目前支援 none / dust / lottery；animationTrigger 必須對應 Rive 狀態機裡的 Trigger 名稱（素材未完成時會由佔位角色模擬）。hint 是梗圖鑑在「還沒被觸發」時顯示的謎面：要指得到路，但不能把諧音講破，否則圖鑑就退回答案本了。",
   "fallback": {
     "id": "confused",
     "label": "聽不懂",
@@ -25,6 +25,7 @@
         "親親",
         "親我"
       ],
+      "hint": "想跟她討一點甜的，用嘴巴給的那種。",
       "mishearAs": "清一個",
       "animationTrigger": "clean",
       "effect": "dust",
@@ -43,6 +44,7 @@
         "抱抱",
         "抱我"
       ],
+      "hint": "冷的時候，你會想跟她要的那個動作。",
       "mishearAs": "報一個",
       "animationTrigger": "lottery",
       "effect": "lottery",
@@ -60,6 +62,7 @@
         "妳好",
         "您好"
       ],
+      "hint": "最平常不過的一句招呼，她也能聽歪。",
       "mishearAs": "泥好",
       "animationTrigger": "mask",
       "effect": "none",
@@ -68,6 +71,35 @@
         "這泥是好泥，敷起來很舒服，你要不要也來一片？",
         "你說泥好，那我就敷了喔，等一下不要跟我說話。"
       ]
+    },
+    {
+      "id": "room",
+      "label": "乖乖坐到床上",
+      "keywords": [
+        "去房間",
+        "回房間",
+        "進房間",
+        "去床上",
+        "上床"
+      ],
+      "hint": "提議換個地方再說——比較私密的那一間。",
+      "mishearAs": "去房間坐",
+      "animationTrigger": "sit",
+      "effect": "bed",
+      "lines": [
+        "去房間坐？好啊——我坐好了，然後呢？",
+        "坐是坐下來了，你站在那邊做什麼？",
+        "我先坐著等你，你慢慢想要說什麼。"
+      ]
     }
-  ]
+  ],
+  "idle": {
+    "_readme": "晾太久之後她自己會做的事。afterSeconds 設 0 或把 lines 清空就是關掉。",
+    "afterSeconds": 45,
+    "lines": [
+      "……你還在嗎？那我先滑一下手機喔。",
+      "太安靜了，我看個影片。",
+      "沒關係，你忙你的，我這邊有得看。"
+    ]
+  }
 }

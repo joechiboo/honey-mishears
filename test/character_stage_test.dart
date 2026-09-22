@@ -5,6 +5,7 @@ import 'package:honey_mishears/data/mishear_rule.dart';
 import 'package:honey_mishears/ui/widgets/character_renderer.dart';
 import 'package:honey_mishears/ui/widgets/character_stage.dart';
 import 'package:honey_mishears/ui/widgets/image_character.dart';
+import 'package:honey_mishears/ui/widgets/painters/bed_painter.dart';
 import 'package:honey_mishears/ui/widgets/placeholder_character.dart';
 
 /// 守的是「素材放進去就會生效」這條路。
@@ -42,6 +43,59 @@ void main() {
       );
 
       expect(find.byType(ImageCharacter), findsOneWidget);
+    });
+  });
+
+  group('設定檔的 animationTrigger 對得到姿勢', () {
+    // 新增姿勢時最容易漏掉 characterPoseFromTrigger——漏了不會編譯錯誤，
+    // 只會安靜地退回 idle，變成「梗有反應但她沒動」。
+    test('每個姿勢的 riveTrigger 都要能反推回自己', () {
+      for (final pose in CharacterPose.values) {
+        expect(characterPoseFromTrigger(pose.riveTrigger), pose,
+            reason: '${pose.name} 的 trigger「${pose.riveTrigger}」對不回來');
+      }
+    });
+
+    test('沒對到的 trigger 退回 idle', () {
+      expect(characterPoseFromTrigger('nonsense'), CharacterPose.idle);
+    });
+  });
+
+  group('床的遮擋層', () {
+    testWidgets('坐在床上時角色畫在床的前後兩層之間', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: CharacterStage(
+              pose: CharacterPose.sitting,
+              effect: StageEffect.bed,
+              assets: CharacterAssets.placeholderOnly,
+            ),
+          ),
+        ),
+      );
+
+      // 前後兩層都要在。少了 front 那層她就變成站在床前面——
+      // 這個姿勢沒有腿，全靠棉被蓋住下半身才讀得出「坐著」。
+      final painters = tester
+          .widgetList<CustomPaint>(find.byType(CustomPaint))
+          .map((w) => w.painter)
+          .whereType<BedPainter>()
+          .map((p) => p.layer)
+          .toList();
+
+      expect(painters, containsAll(<BedLayer>[BedLayer.back, BedLayer.front]));
+    });
+
+    testWidgets('其他情境不會冒出床', (tester) async {
+      await pumpStage(tester, CharacterAssets.placeholderOnly);
+
+      final beds = tester
+          .widgetList<CustomPaint>(find.byType(CustomPaint))
+          .map((w) => w.painter)
+          .whereType<BedPainter>();
+
+      expect(beds, isEmpty);
     });
   });
 

@@ -49,6 +49,10 @@ class WifePainter extends CustomPainter {
   /// 打掃時握住掃把的位置，右手與掃把都對齊這一點
   static const Offset _broomGrip = Offset(204, 216);
 
+  /// 坐著／滑手機時兩隻手在腿上會合的位置，手機也放在這裡。
+  /// 不能再低了——坐在床上時棉被的上緣就在這下面一點，手會被切掉。
+  static const Offset _lapHand = Offset(120, 250);
+
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
@@ -68,6 +72,8 @@ class WifePainter extends CustomPainter {
     }
     _mouth(canvas);
     _bangs(canvas);
+    // 手機畫在手之後，才會是「捧在手裡」而不是嵌進手掌
+    if (pose == CharacterPose.scrolling) _phone(canvas);
     if (pose == CharacterPose.confused) _questionMark(canvas);
 
     canvas.restore();
@@ -262,6 +268,12 @@ class WifePainter extends CustomPainter {
   void _arms(Canvas canvas) {
     final skin = Paint()..color = _skin;
 
+    // 坐著與滑手機都是兩手往身體中線收，左右對稱，走另一條路
+    if (pose == CharacterPose.sitting || pose == CharacterPose.scrolling) {
+      _armsToLap(canvas, skin);
+      return;
+    }
+
     canvas.drawPath(
       Path()
         ..moveTo(48, 230)
@@ -304,6 +316,38 @@ class WifePainter extends CustomPainter {
           ..close(),
         skin,
       );
+    }
+  }
+
+  /// 兩手收到腿上。坐著時手交疊、滑手機時捧著手機，
+  /// 差別只在手掌之間放了什麼，所以前臂共用同一條曲線。
+  ///
+  /// 這裡用圓頭粗線而不是填色路徑：手臂往內收的角度下，
+  /// 填色版的兩條邊會各自鼓起來，看起來像兩塊粉色的瘤。
+  void _armsToLap(Canvas canvas, Paint skin) {
+    final limb = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 18
+      ..strokeCap = StrokeCap.round
+      ..color = skin.color;
+
+    // 坐著時兩手交疊成一團；滑手機時分開一點，中間要放得下手機
+    final spread = pose == CharacterPose.scrolling ? 17.0 : 10.0;
+
+    // 只畫前臂，而且從袖口內側起筆。從肩膀起筆的版本會讓整條手臂
+    // 橫跨過裙子，兩側各鼓出一片，看起來像兩片蹼。
+    for (final left in const [true, false]) {
+      final cuffX = left ? 80.0 : 160.0;
+      final handX = _lapHand.dx + (left ? -spread : spread);
+
+      canvas.drawPath(
+        Path()
+          ..moveTo(cuffX, 238)
+          ..quadraticBezierTo(
+              left ? 90 : 150, 250, handX, _lapHand.dy),
+        limb,
+      );
+      canvas.drawCircle(Offset(handX, _lapHand.dy), 11.5, skin);
     }
   }
 
@@ -406,6 +450,12 @@ class WifePainter extends CustomPainter {
         case CharacterPose.confused:
           lift = left ? -5 : 2; // 一高一低：困惑
           break;
+        case CharacterPose.sitting:
+          lift = -2; // 微微挑起：坐好了，等你下一句
+          break;
+        case CharacterPose.scrolling:
+          lift = 2; // 放鬆垂下：整個人在手機裡
+          break;
         case CharacterPose.idle:
         case CharacterPose.lottery:
         case CharacterPose.mask:
@@ -430,9 +480,15 @@ class WifePainter extends CustomPainter {
       return;
     }
 
-    // 聆聽時眼睛睜大，裝傻時瞳孔往旁邊瞟
-    final open = pose == CharacterPose.listening ? 1.14 : 1.0;
+    // 聆聽時眼睛睜大，裝傻時瞳孔往旁邊瞟，滑手機時眼皮垂下、視線往下
+    final scrolling = pose == CharacterPose.scrolling;
+    final open = pose == CharacterPose.listening
+        ? 1.14
+        : scrolling
+            ? 0.78
+            : 1.0;
     final gaze = pose == CharacterPose.confused ? 2.5 : 0.0;
+    final gazeY = scrolling ? 4.0 : 0.0;
 
     for (var i = 0; i < 2; i++) {
       final c = _eyeCenters[i];
@@ -455,7 +511,7 @@ class WifePainter extends CustomPainter {
       canvas.clipPath(eye);
 
       // 虹膜：上淺下深，動漫眼的關鍵
-      final irisC = Offset(c.dx + gaze, c.dy + 1);
+      final irisC = Offset(c.dx + gaze, c.dy + 1 + gazeY);
       final iris = Rect.fromCenter(center: irisC, width: 23, height: 27 * open);
       canvas.drawOval(
         iris,
@@ -611,6 +667,32 @@ class WifePainter extends CustomPainter {
             ..strokeWidth = 3.2
             ..strokeCap = StrokeCap.round
             ..color = _deepRose,
+        );
+        break;
+      case CharacterPose.sitting:
+        // 抿著的小嘴配挑起的眉，就是「我照做了，接下來呢」
+        canvas.drawPath(
+          Path()
+            ..moveTo(112, y + 1)
+            ..cubicTo(117, y + 4, 123, y + 4, 128, y + 1),
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 3
+            ..strokeCap = StrokeCap.round
+            ..color = _deepRose,
+        );
+        break;
+      case CharacterPose.scrolling:
+        // 看手機看到忘記表情的那張臉：幾乎是一條平的線
+        canvas.drawPath(
+          Path()
+            ..moveTo(113, y + 2)
+            ..cubicTo(117, y + 4, 123, y + 4, 127, y + 2),
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.8
+            ..strokeCap = StrokeCap.round
+            ..color = _deepRose.withOpacity(0.8),
         );
         break;
       case CharacterPose.idle:
@@ -783,6 +865,46 @@ class WifePainter extends CustomPainter {
   /// 用 Path 畫而不是 TextPainter 畫 '?'：字型不在自己手上，
   /// 缺字時會變成一個實心方塊（flutter_test 的 Ahem 字型就是這樣，
   /// 裝置上換了 fallback 也可能歪掉）。自己畫的形狀到哪都一樣。
+  /// 手機。稍微朝她自己傾斜，螢幕那面才看得到——
+  /// 完全正對觀眾會變成她在給你看手機，那是另一個意思。
+  void _phone(Canvas canvas) {
+    canvas.save();
+    canvas.translate(_lapHand.dx, _lapHand.dy - 6);
+    canvas.rotate(-0.12);
+
+    const body = Rect.fromLTWH(-17, -28, 34, 56);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(body, const Radius.circular(6)),
+      Paint()..color = const Color(0xFF3F3338),
+    );
+    final screen = body.deflate(3.5);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(screen, const Radius.circular(4)),
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFDDE9F1), Color(0xFFB9C9DA)],
+        ).createShader(screen),
+    );
+
+    // 螢幕上三條假內容，不畫的話那是一塊發光的磚
+    final row = Paint()..color = Colors.white.withOpacity(0.75);
+    for (var i = 0; i < 3; i++) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(-11, -18.0 + i * 12, 22 - i * 5.0, 4),
+          const Radius.circular(2),
+        ),
+        row,
+      );
+    }
+
+    canvas.restore();
+    // 本來在下巴下面加了一圈螢幕冷光，但這種平塗畫風撐不住：
+    // 它會落在白衣領上、看起來像脖子髒了。低頭與垂下的眼皮已經夠清楚。
+  }
+
   void _questionMark(Canvas canvas) {
     canvas.save();
     canvas.translate(196, 44);

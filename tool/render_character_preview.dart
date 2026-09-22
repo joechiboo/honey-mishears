@@ -75,6 +75,10 @@ void main() {
     const cases = {
       'stage_idle': (CharacterPose.idle, StageEffect.none),
       'stage_clean': (CharacterPose.clean, StageEffect.dust),
+      // 坐在床上只有擺進舞台才看得出來：她本人沒有腿，
+      // 「坐著」整個是靠棉被那層遮出來的
+      'stage_sitting': (CharacterPose.sitting, StageEffect.bed),
+      'stage_scrolling': (CharacterPose.scrolling, StageEffect.none),
     };
 
     for (final entry in cases.entries) {
