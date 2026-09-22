@@ -28,4 +28,24 @@ class AppConfig {
 
   /// 放開按鈕後，最多再等多久拿最終辨識結果
   static const Duration finalResultTimeout = Duration(milliseconds: 2500);
+
+  // ── 取名環節 ──────────────────────────────────────────────
+  //
+  // 取名一律是可以拒絕的：她主動問的時候有「再說吧」，被打發了就把門檻往後推，
+  // 推滿就不再主動問。沒有名字的狀態要能一直玩下去。
+
+  /// 累積幾輪對話之後，她才會自己開口要名字
+  static const int namingPromptAfter = 5;
+
+  /// 被打發一次之後，要再多幾輪才會再問
+  static const int namingPromptCooldown = 8;
+
+  /// 被打發幾次之後就永久不再主動問
+  static const int maxNamingPromptDeclines = 2;
+
+  /// 名字最多幾個字。辨識結果常常整句話都進來，要截斷。
+  static const int maxWifeNameLength = 8;
+
+  /// 她問完名字之後，隔多久才冒泡（讓上一輪的反應先演完）
+  static const Duration namingOfferDelay = Duration(milliseconds: 1400);
 }

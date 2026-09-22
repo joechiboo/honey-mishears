@@ -60,7 +60,7 @@ class WifePainter extends CustomPainter {
     _neck(canvas);
     _face(canvas);
     if (pose == CharacterPose.mask) {
-      _clayMask(canvas);
+      _sheetMask(canvas);
     } else {
       _brows(canvas);
       _eyes(canvas);
@@ -587,11 +587,12 @@ class WifePainter extends CustomPainter {
         );
         break;
       case CharacterPose.mask:
-        // 敷著泥，嘴放鬆抿著
+        // 敷著面膜，嘴角放鬆上揚。
+        // 閉眼配一條平的嘴等於「沒有表情」，很容易讀成陰森
         canvas.drawPath(
           Path()
-            ..moveTo(112, y + 4)
-            ..cubicTo(117, y + 7, 123, y + 7, 128, y + 4),
+            ..moveTo(113, y)
+            ..cubicTo(117, y + 6, 123, y + 6, 127, y),
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = 3
@@ -629,49 +630,96 @@ class WifePainter extends CustomPainter {
 
   // ── 情境部件 ──────────────────────────────────────────────
 
-  /// 敷泥膜：整張臉蓋一層泥，眼睛壓兩片小黃瓜
-  void _clayMask(Canvas canvas) {
+  /// 敷面膜：白色片狀面膜，挖眼洞與嘴洞，眼睛在洞裡閉著。
+  ///
+  /// 第一版是綠色泥膜加兩片小黃瓜，配色再怎麼調都偏驚悚——
+  /// 整張臉塗成綠的就是恐怖片。白面膜是大家真的在用的東西，
+  /// 也接得上她那句「你要不要也來一片」。
+  void _sheetMask(Canvas canvas) {
     canvas.save();
     canvas.clipPath(_facePath());
-    // 上緣用透明漸層收掉，不要切一條硬邊。
-    // 整張臉平塗會從瀏海分線的空隙露出一塊綠、像戴了頭盔；
+
+    // 上緣用透明漸層收掉，不要切一條硬邊：
+    // 平塗整張臉會從瀏海分線的空隙露出一塊白、像戴了頭盔；
     // 直接切在髮際線又會出現一條水平線，像泡在水裡。
-    const clayRect = Rect.fromLTWH(60, 70, 120, 110);
+    const sheetRect = Rect.fromLTWH(60, 70, 120, 110);
     canvas.drawRect(
-      clayRect,
+      sheetRect,
       Paint()
         ..shader = const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0x00B9CBA7), Color(0xFFB9CBA7), Color(0xFF9AB186)],
-          stops: [0.0, 0.38, 1.0],
-        ).createShader(clayRect),
+          colors: [Color(0x00FBF6F2), Color(0xFFFBF6F2), Color(0xFFEFE3DA)],
+          stops: [0.0, 0.34, 1.0],
+        ).createShader(sheetRect),
     );
-    // 泥的顆粒感
-    final speck = Paint()..color = const Color(0xFF7C9268).withOpacity(0.5);
-    for (var i = 0; i < 14; i++) {
-      final a = i * 2.39996; // 黃金角，散得比較勻
-      final r = 8.0 + i * 2.8;
-      canvas.drawCircle(
-        Offset(120 + r * math.cos(a), 136 + r * math.sin(a) * 0.8),
-        1.6,
-        speck,
-      );
-    }
+
+    // 只留下巴下方一道很輕的摺線。
+    // 兩側各加一道會變成從眼睛流下來的淚痕，斜向的高光會變成一道裂痕——
+    // 為了「看起來是濕的」加的細節，反而是這張圖之前恐怖的來源。
+    canvas.drawPath(
+      Path()
+        ..moveTo(106, 166)
+        ..cubicTo(112, 170, 128, 170, 134, 166),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..strokeCap = StrokeCap.round
+        ..color = const Color(0xFFE0D2CA),
+    );
+
     canvas.restore();
 
-    for (final c in _eyeCenters) {
-      canvas.drawCircle(c, 16, Paint()..color = const Color(0xFFCFE6AF));
-      canvas.drawCircle(
-        c,
-        16,
+    // 眼洞：露出底下的皮膚，眼睛在裡面閉著
+    for (var i = 0; i < 2; i++) {
+      final c = _eyeCenters[i];
+      final out = i == 0 ? -1.0 : 1.0;
+      final hole = Rect.fromCenter(center: c, width: 32, height: 21);
+
+      canvas.drawOval(hole, Paint()..color = _skin);
+      canvas.drawOval(
+        hole,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 3.5
-          ..color = const Color(0xFF7FA05C),
+          ..strokeWidth = 1.2
+          ..color = const Color(0xFFEADCD4),
       );
-      canvas.drawCircle(c, 7, Paint()..color = const Color(0xFFE6F2D4));
+
+      // 閉著的眼：往下彎的弧，末端往外挑一小截睫毛
+      canvas.drawPath(
+        Path()
+          ..moveTo(c.dx - 11 * out, c.dy - 1)
+          ..cubicTo(c.dx - 5 * out, c.dy + 7, c.dx + 5 * out, c.dy + 7,
+              c.dx + 11 * out, c.dy - 1),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3
+          ..strokeCap = StrokeCap.round
+          ..color = _ink,
+      );
+      canvas.drawPath(
+        Path()
+          ..moveTo(c.dx + 11 * out, c.dy - 1)
+          ..lineTo(c.dx + 16 * out, c.dy - 5),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.4
+          ..strokeCap = StrokeCap.round
+          ..color = _ink,
+      );
     }
+
+    // 嘴洞。嘴本身由 _mouth 畫在這之後，所以這裡只開洞
+    final mouthHole =
+        Rect.fromCenter(center: const Offset(120, 154), width: 30, height: 16);
+    canvas.drawOval(mouthHole, Paint()..color = _skin);
+    canvas.drawOval(
+      mouthHole,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..color = const Color(0xFFEADCD4),
+    );
   }
 
   /// 掃把：以握把為軸心跟著 t 擺動，手畫在軸心上所以不會鬆手

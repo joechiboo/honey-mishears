@@ -40,7 +40,7 @@
 | `listening.png` | Leaning slightly forward, eyes wide with interest, one hand cupped behind her ear, listening attentively. |
 | `clean.png` | Sleeves rolled up, holding a broom with both hands, energetic determined expression, mid-sweep pose. |
 | `lottery.png` | Wearing black sunglasses, arms crossed confidently, smug knowing smirk. |
-| `mask.png` | Face fully covered in a green clay mask, two cucumber slices over her eyes, relaxed spa expression, hands resting. |
+| `mask.png` | Wearing a white sheet face mask with eye and mouth openings, eyes closed, relaxed contented expression, hands resting. |
 | `confused.png` | Head tilted to one side, puzzled expression, one finger on her chin, slightly raised eyebrow. |
 
 > ⚠️ 檔名跟的是程式裡 `CharacterPose` 的 enum 名稱，
