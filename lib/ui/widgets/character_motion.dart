@@ -68,7 +68,9 @@ double _tiltFor(CharacterPose pose, double t) {
     case CharacterPose.listening:
       return -0.04; // 聆聽：微微前傾
     case CharacterPose.mask:
-      return 0; // 敷著泥，不敢亂動
+      return 0; // 敷著面膜，不敢亂動
+    case CharacterPose.bundled:
+      return (t - 0.5) * 0.05; // 包太緊，只能小幅度晃
     case CharacterPose.idle:
     case CharacterPose.lottery:
       return 0;

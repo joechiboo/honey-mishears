@@ -18,6 +18,8 @@ void main() {
           'assets/character/default/lottery.png');
       expect(characterImageAsset(CharacterPose.mask),
           'assets/character/default/mask.png');
+      expect(characterImageAsset(CharacterPose.bundled),
+          'assets/character/default/bundled.png');
       expect(characterImageAsset(CharacterPose.confused),
           'assets/character/default/confused.png');
     });

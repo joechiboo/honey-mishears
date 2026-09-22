@@ -41,6 +41,7 @@
 | `clean.png` | Sleeves rolled up, holding a broom with both hands, energetic determined expression, mid-sweep pose. |
 | `lottery.png` | Wearing black sunglasses, arms crossed confidently, smug knowing smirk. |
 | `mask.png` | Wearing a white sheet face mask with eye and mouth openings, eyes closed, relaxed contented expression, hands resting. |
+| `bundled.png` | Bundled up in a thick lavender winter coat and a cream knitted scarf wrapped up over her mouth, only her eyes showing, slightly muffled happy expression. |
 | `confused.png` | Head tilted to one side, puzzled expression, one finger on her chin, slightly raised eyebrow. |
 
 > ⚠️ 檔名跟的是程式裡 `CharacterPose` 的 enum 名稱，

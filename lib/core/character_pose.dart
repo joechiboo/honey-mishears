@@ -17,6 +17,9 @@ enum CharacterPose {
   /// 敷面膜：白色片狀面膜，挖眼洞與嘴洞，眼睛在洞裡閉著
   mask,
 
+  /// 包緊：換上厚外套、圍上圍巾，包到只剩眼睛
+  bundled,
+
   /// 歪頭裝傻
   confused,
 }
@@ -35,6 +38,8 @@ extension CharacterPoseX on CharacterPose {
         return 'lottery';
       case CharacterPose.mask:
         return 'mask';
+      case CharacterPose.bundled:
+        return 'bundle';
       case CharacterPose.confused:
         return 'confuse';
     }
@@ -50,6 +55,8 @@ CharacterPose characterPoseFromTrigger(String trigger) {
       return CharacterPose.lottery;
     case 'mask':
       return CharacterPose.mask;
+    case 'bundle':
+      return CharacterPose.bundled;
     case 'confuse':
       return CharacterPose.confused;
     case 'listen':

@@ -29,8 +29,15 @@ class WifePainter extends CustomPainter {
   static const Color _hair = Color(0xFF6E4B3A);
   static const Color _hairDark = Color(0xFF503327);
   static const Color _hairLight = Color(0xFF9C7058);
-  static const Color _dress = Color(0xFFF7C8D0);
-  static const Color _dressShade = Color(0xFFE6A2B1);
+  static const Color _blouse = Color(0xFFFFF8F3);
+  static const Color _blouseShade = Color(0xFFEBD6C9);
+  static const Color _blouseLine = Color(0xFFD7BCAC);
+  static const Color _pinafore = Color(0xFFE79AA8);
+  static const Color _pinaforeShade = Color(0xFFCB7787);
+  static const Color _coat = Color(0xFFD9CCEA);
+  static const Color _coatShade = Color(0xFFBBA6D6);
+  static const Color _scarfBase = Color(0xFFFFF6F0);
+  static const Color _scarfStripe = Color(0xFFE79AA8);
   static const Color _rose = Color(0xFFE79AA8);
   static const Color _deepRose = Color(0xFFB4687A);
   static const Color _ink = Color(0xFF5B4A50);
@@ -67,6 +74,7 @@ class WifePainter extends CustomPainter {
       _blush(canvas);
     }
     _mouth(canvas);
+    if (_wearingCoat) _scarf(canvas);
     _bangs(canvas);
     if (pose == CharacterPose.confused) _questionMark(canvas);
 
@@ -168,35 +176,189 @@ class WifePainter extends CustomPainter {
 
   // ── 身體 ─────────────────────────────────────────────────
 
+  // 衣服的輪廓。上衣、吊帶裙、外套共用同一條剪影，換的是裡面怎麼分色
+  Path _garmentPath() => Path()
+    ..moveTo(102, 182)
+    ..lineTo(138, 182)
+    ..cubicTo(164, 184, 188, 196, 194, 216)
+    ..cubicTo(198, 250, 200, 278, 202, 300)
+    ..lineTo(38, 300)
+    ..cubicTo(40, 278, 42, 250, 46, 216)
+    ..cubicTo(52, 196, 76, 184, 102, 182)
+    ..close();
+
+  static const Rect _garmentRect = Rect.fromLTWH(38, 182, 164, 118);
+
+  /// 包緊的時候整身換成外套
+  bool get _wearingCoat => pose == CharacterPose.bundled;
+
   void _body(Canvas canvas) {
-    const dressRect = Rect.fromLTWH(38, 182, 164, 118);
+    final garment = _garmentPath();
 
-    // 肩線直接做出短袖的輪廓。曾經用兩顆橢圓當泡泡袖，
-    // 但在這個頭身比下看起來就是胸前掛了兩球，不如讓裙身自己收。
-    final dress = Path()
-      ..moveTo(102, 182)
-      ..lineTo(138, 182)
-      ..cubicTo(164, 184, 188, 196, 194, 216)
-      ..cubicTo(198, 250, 200, 278, 202, 300)
-      ..lineTo(38, 300)
-      ..cubicTo(40, 278, 42, 250, 46, 216)
-      ..cubicTo(52, 196, 76, 184, 102, 182)
-      ..close();
+    if (_wearingCoat) {
+      _coatBody(canvas, garment);
+    } else {
+      _blouseAndPinafore(canvas, garment);
+    }
 
+    _arms(canvas);
+    _sleeveCaps(canvas);
+    if (!_wearingCoat) _collarAndBow(canvas);
+  }
+
+  /// 奶油色上衣 + 玫瑰色吊帶裙。
+  ///
+  /// 原本整身同一個粉色，看起來就是一塊布——沒有腰身、沒有層次。
+  /// 分成兩個色塊之後結構才出來，圍兜也順便呼應打掃那個梗。
+  void _blouseAndPinafore(Canvas canvas, Path garment) {
     canvas.drawPath(
-      dress,
+      garment,
       Paint()
         ..shader = const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [_dress, _dressShade],
-        ).createShader(dressRect),
+          colors: [_blouse, _blouseShade],
+        ).createShader(_garmentRect),
     );
 
-    _arms(canvas);
+    // 裙子與腰線：裁在上衣的剪影裡，邊緣才會對齊
+    canvas.save();
+    canvas.clipPath(garment);
+    const skirt = Rect.fromLTWH(30, 230, 180, 70);
+    // 腰線稍微往下彎。畫成一條水平直線會像把人橫切一刀
+    final skirtTop = Path()
+      ..moveTo(30, 231)
+      ..cubicTo(74, 240, 166, 240, 210, 231)
+      ..lineTo(210, 300)
+      ..lineTo(30, 300)
+      ..close();
+    canvas.drawPath(
+      skirtTop,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [_pinafore, _pinaforeShade],
+        ).createShader(skirt),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(30, 231)
+        ..cubicTo(74, 240, 166, 240, 210, 231),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..color = _pinaforeShade,
+    );
+    canvas.restore();
 
-    // 袖口：填色的袖蓋，畫在手臂之後，蓋掉手臂上緣的接縫。
-    // 用描邊畫過一版，看起來像兩個粉色鉤子浮在手臂上，填色才像衣服。
+    // 胸前的圍兜與吊帶
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(97, 200, 46, 34),
+        const Radius.circular(5),
+      ),
+      Paint()..color = _pinafore,
+    );
+    final strap = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7
+      ..strokeCap = StrokeCap.round
+      ..color = _pinafore;
+    canvas.drawLine(const Offset(102, 204), const Offset(93, 187), strap);
+    canvas.drawLine(const Offset(138, 204), const Offset(147, 187), strap);
+
+    for (final y in const [212.0, 224.0]) {
+      canvas.drawCircle(Offset(120, y), 2.6, Paint()..color = _blouse);
+    }
+  }
+
+  /// 包緊：薰衣草色的厚外套。房間跟她本來的衣服都是粉系，
+  /// 外套換一個色系才看得出「多穿了一件」
+  void _coatBody(Canvas canvas, Path garment) {
+    canvas.drawPath(
+      garment,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [_coat, _coatShade],
+        ).createShader(_garmentRect),
+    );
+
+    canvas.save();
+    canvas.clipPath(garment);
+    canvas.drawLine(
+      const Offset(120, 190),
+      const Offset(120, 300),
+      Paint()
+        ..strokeWidth = 2.5
+        ..color = _coatShade,
+    );
+    canvas.restore();
+
+    for (final y in const [222.0, 248.0, 274.0]) {
+      canvas.drawCircle(
+          Offset(120, y), 3.4, Paint()..color = const Color(0xFFFFF6F0));
+    }
+  }
+
+  /// 手臂。左手一律垂在身側；右手打掃時往外伸去握掃把。
+  /// 包緊時這裡畫的是外套袖子，不是皮膚。
+  void _arms(Canvas canvas) {
+    final limb = Paint()..color = _wearingCoat ? _coatShade : _skin;
+
+    canvas.drawPath(
+      Path()
+        ..moveTo(48, 230)
+        ..cubicTo(42, 256, 39, 280, 41, 300)
+        ..lineTo(64, 300)
+        ..cubicTo(62, 276, 64, 252, 70, 233)
+        ..close(),
+      limb,
+    );
+
+    if (pose == CharacterPose.clean) {
+      // 前臂斜斜伸向握把，終點落在 _broomGrip
+      canvas.drawPath(
+        Path()
+          ..moveTo(170, 230)
+          ..cubicTo(182, 230, 196, 226, _broomGrip.dx, _broomGrip.dy - 4)
+          ..cubicTo(206, 224, 204, 230, 200, 232)
+          ..cubicTo(190, 238, 180, 242, 168, 244)
+          ..close(),
+        limb,
+      );
+      canvas.drawCircle(_broomGrip, 10.5, limb);
+      canvas.drawArc(
+        Rect.fromCircle(center: _broomGrip, radius: 10.5),
+        math.pi * 0.1,
+        math.pi * 0.8,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..color = _skinShade,
+      );
+    } else {
+      canvas.drawPath(
+        Path()
+          ..moveTo(192, 230)
+          ..cubicTo(198, 256, 201, 280, 199, 300)
+          ..lineTo(176, 300)
+          ..cubicTo(178, 276, 176, 252, 170, 233)
+          ..close(),
+        limb,
+      );
+    }
+  }
+
+  /// 袖蓋：填色的小片，畫在手臂之後，蓋掉手臂上緣的接縫。
+  /// 用描邊畫過一版，看起來像兩個粉色鉤子浮在手臂上，填色才像衣服。
+  void _sleeveCaps(Canvas canvas) {
+    final top = _wearingCoat ? _coat : _blouse;
+    final bottom = _wearingCoat ? _coatShade : _blouseShade;
+
     for (final left in const [true, false]) {
       final dir = left ? 1.0 : -1.0;
       final x = left ? 44.0 : 196.0;
@@ -206,15 +368,17 @@ class WifePainter extends CustomPainter {
           ..cubicTo(x + 4 * dir, 232, x + 16 * dir, 244, x + 32 * dir, 240)
           ..cubicTo(x + 26 * dir, 226, x + 16 * dir, 214, x + 6 * dir, 206)
           ..close(),
-        // 用裙身同一條漸層填，袖蓋才會跟衣服連成一片；
-        // 單獨填 _dress 會在漸層中段變成一塊明顯亮起來的補丁
+        // 吃衣服同一條漸層，袖蓋才會連成一片；
+        // 單獨填亮色會在漸層中段變成一塊明顯的補丁
         Paint()
-          ..shader = const LinearGradient(
+          ..shader = LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [_dress, _dressShade],
-          ).createShader(dressRect),
+            colors: [top, bottom],
+          ).createShader(_garmentRect),
       );
+      // 袖口線要看得見。用 bottom（衣服的暗部）畫過一版，
+      // 跟膚色差太少，袖子跟手臂會黏成一塊淺色
       canvas.drawPath(
         Path()
           ..moveTo(x, 214)
@@ -223,11 +387,12 @@ class WifePainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.5
           ..strokeCap = StrokeCap.round
-          ..color = _dressShade,
+          ..color = _wearingCoat ? _coatShade : _blouseLine,
       );
     }
+  }
 
-    // 衣領
+  void _collarAndBow(Canvas canvas) {
     canvas.drawPath(
       Path()
         ..moveTo(102, 182)
@@ -237,7 +402,6 @@ class WifePainter extends CustomPainter {
       Paint()..color = const Color(0xFFFFF6F0),
     );
 
-    // 胸前的蝴蝶結
     final bow = Paint()..color = _deepRose;
     canvas.drawPath(
       Path()
@@ -258,53 +422,37 @@ class WifePainter extends CustomPainter {
     canvas.drawCircle(const Offset(120, 194), 4.5, Paint()..color = _rose);
   }
 
-  /// 手臂。左手一律垂在身側；右手打掃時往外伸去握掃把。
-  void _arms(Canvas canvas) {
-    final skin = Paint()..color = _skin;
+  /// 圍巾：繞過脖子往上蓋到鼻子下面，嘴巴整個被包住——只剩眼睛露出來
+  void _scarf(Canvas canvas) {
+    final band = Path()
+      ..moveTo(78, 150)
+      ..cubicTo(88, 137, 152, 137, 162, 150)
+      ..cubicTo(168, 167, 160, 187, 140, 193)
+      ..cubicTo(126, 196, 114, 196, 100, 193)
+      ..cubicTo(80, 187, 72, 167, 78, 150)
+      ..close();
+    canvas.drawPath(band, Paint()..color = _scarfBase);
 
-    canvas.drawPath(
-      Path()
-        ..moveTo(48, 230)
-        ..cubicTo(42, 256, 39, 280, 41, 300)
-        ..lineTo(64, 300)
-        ..cubicTo(62, 276, 64, 252, 70, 233)
-        ..close(),
-      skin,
-    );
-
-    if (pose == CharacterPose.clean) {
-      // 前臂斜斜伸向握把，終點落在 _broomGrip
-      canvas.drawPath(
-        Path()
-          ..moveTo(170, 230)
-          ..cubicTo(182, 230, 196, 226, _broomGrip.dx, _broomGrip.dy - 4)
-          ..cubicTo(206, 224, 204, 230, 200, 232)
-          ..cubicTo(190, 238, 180, 242, 168, 244)
-          ..close(),
-        skin,
-      );
-      canvas.drawCircle(_broomGrip, 10.5, skin);
-      canvas.drawArc(
-        Rect.fromCircle(center: _broomGrip, radius: 10.5),
-        math.pi * 0.1,
-        math.pi * 0.8,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2
-          ..color = _skinShade,
-      );
-    } else {
-      canvas.drawPath(
-        Path()
-          ..moveTo(192, 230)
-          ..cubicTo(198, 256, 201, 280, 199, 300)
-          ..lineTo(176, 300)
-          ..cubicTo(178, 276, 176, 252, 170, 233)
-          ..close(),
-        skin,
+    canvas.save();
+    canvas.clipPath(band);
+    for (final y in const [158.0, 175.0]) {
+      canvas.drawRect(
+        Rect.fromLTWH(70, y, 100, 6),
+        Paint()..color = _scarfStripe.withOpacity(0.7),
       );
     }
+    canvas.restore();
+
+    // 垂在身前的一端
+    canvas.drawPath(
+      Path()
+        ..moveTo(142, 188)
+        ..cubicTo(162, 196, 168, 214, 162, 232)
+        ..lineTo(144, 228)
+        ..cubicTo(150, 212, 148, 198, 138, 192)
+        ..close(),
+      Paint()..color = _scarfBase,
+    );
   }
 
   void _neck(Canvas canvas) {
@@ -409,6 +557,7 @@ class WifePainter extends CustomPainter {
         case CharacterPose.idle:
         case CharacterPose.lottery:
         case CharacterPose.mask:
+        case CharacterPose.bundled:
           break;
       }
 
@@ -612,6 +761,9 @@ class WifePainter extends CustomPainter {
             ..strokeCap = StrokeCap.round
             ..color = _deepRose,
         );
+        break;
+      case CharacterPose.bundled:
+        // 圍巾蓋到鼻子下面，嘴根本看不到，不用畫
         break;
       case CharacterPose.idle:
         canvas.drawPath(
