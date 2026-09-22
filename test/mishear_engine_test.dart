@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:honey_mishears/data/mishear_repository.dart';
 import 'package:honey_mishears/data/mishear_rule.dart';
+import 'package:honey_mishears/data/naming_config.dart';
 import 'package:honey_mishears/services/mishear_engine.dart';
 
 /// 測試用的假設定檔，不依賴真正的 JSON
@@ -16,6 +17,7 @@ MishearConfig _testConfig() => const MishearConfig(
         animationTrigger: 'confuse',
         effect: StageEffect.none,
         lines: ['嗯？'],
+        linesWhen: {'repeat': ['我們今天是不是不太通？']},
       ),
       rules: [
         MishearRule(
@@ -26,6 +28,11 @@ MishearConfig _testConfig() => const MishearConfig(
           animationTrigger: 'clean',
           effect: StageEffect.dust,
           lines: ['清一個？好呀。'],
+          linesWhen: {
+            'repeat': ['又清？'],
+            // 跟自己同名的 key：用來驗證 repeat 的優先序比它高
+            'clean': ['這一句不該被挑到'],
+          },
         ),
         MishearRule(
           id: 'lottery',
@@ -35,8 +42,12 @@ MishearConfig _testConfig() => const MishearConfig(
           animationTrigger: 'lottery',
           effect: StageEffect.lottery,
           lines: ['報一個是吧？'],
+          linesWhen: {'clean': ['手上還拿著掃把。']},
         ),
       ],
+      naming: NamingConfig(
+        keywords: ['你叫什麼名字', '幫你取名'],
+      ),
     );
 
 void main() {
@@ -90,6 +101,45 @@ void main() {
     });
   });
 
+  group('看場合的台詞', () {
+    test('會接上一個狀態', () {
+      final result = engine.interpret('抱一個', previousRuleId: 'clean');
+      expect(result.line, '手上還拿著掃把。');
+    });
+
+    test('連續命中同一條梗改用 repeat，而且蓋過同名的狀態台詞', () {
+      final result = engine.interpret('親一個', previousRuleId: 'clean');
+      expect(result.line, '又清？');
+    });
+
+    test('沒有對應場合就退回預設台詞池', () {
+      final result = engine.interpret('親一個', previousRuleId: 'mask');
+      expect(result.line, '清一個？好呀。');
+    });
+
+    test('沒有上一輪時用預設台詞池', () {
+      expect(engine.interpret('親一個').line, '清一個？好呀。');
+    });
+
+    test('連續聽不懂也吃 repeat', () {
+      final result = engine.interpret('今天天氣真好', previousRuleId: 'confused');
+      expect(result.line, '我們今天是不是不太通？');
+    });
+  });
+
+  group('取名觸發語', () {
+    test('命中取名觸發語', () {
+      expect(engine.isNamingRequest('你叫什麼名字'), isTrue);
+      expect(engine.isNamingRequest('欸，幫你取名好不好'), isTrue);
+    });
+
+    test('諧音梗與閒聊不會誤觸取名', () {
+      expect(engine.isNamingRequest('親一個'), isFalse);
+      expect(engine.isNamingRequest('今天天氣真好'), isFalse);
+      expect(engine.isNamingRequest(''), isFalse);
+    });
+  });
+
   group('正規化', () {
     test('保留中文與英數，去掉其餘字元', () {
       expect(MishearEngine.normalize('親一個！！ ok 123'), '親一個ok123');
@@ -110,6 +160,39 @@ void main() {
       for (final rule in [...config.rules, config.fallback]) {
         expect(rule.lines.length, greaterThanOrEqualTo(3),
             reason: '${rule.id} 的台詞不足 3 句');
+      }
+    });
+
+    test('linesWhen 的 key 都指得到東西', () async {
+      final config = await MishearRepository().load();
+      final known = {
+        MishearRule.repeatContext,
+        config.fallback.id,
+        ...config.rules.map((r) => r.id),
+      };
+
+      // key 打錯字的話那組台詞永遠不會被挑到，而且不會有任何錯誤訊息
+      for (final rule in [...config.rules, config.fallback]) {
+        for (final context in rule.linesWhen.keys) {
+          expect(known, contains(context),
+              reason: '${rule.id} 的 linesWhen 有一個對不到任何狀態的 key：$context');
+          expect(rule.linesWhen[context], isNotEmpty,
+              reason: '${rule.id} 的 linesWhen[$context] 是空的');
+        }
+      }
+    });
+
+    test('取名觸發語不會把諧音梗的關鍵字吃掉', () async {
+      final config = await MishearRepository().load();
+      final realEngine = MishearEngine(config, random: Random(1));
+
+      // 取名比 rules 早比對，所以取名觸發語要是命中了某條梗的關鍵字，
+      // 那條梗就永遠觸發不到了。
+      for (final rule in config.rules) {
+        for (final keyword in rule.keywords) {
+          expect(realEngine.isNamingRequest(keyword), isFalse,
+              reason: '「$keyword」（${rule.id}）會被取名環節搶走');
+        }
       }
     });
   });

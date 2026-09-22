@@ -1,21 +1,29 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/app_config.dart';
 import '../core/app_theme.dart';
 import '../core/character_pose.dart';
 import '../data/mishear_repository.dart';
 import '../data/mishear_rule.dart';
+import '../data/telemetry_store.dart';
+import '../data/wife_identity.dart';
 import '../services/lottery_generator.dart';
 import '../services/mishear_engine.dart';
+import '../services/name_mishearer.dart';
 import '../services/speech_service.dart';
+import '../services/transcript_uploader.dart';
 import 'widgets/character_renderer.dart';
 import 'widgets/character_stage.dart';
 import 'widgets/dialogue_bubble.dart';
 import 'widgets/language_pack_sheet.dart';
+import 'widgets/naming_sheet.dart';
 import 'widgets/notice_sheet.dart';
 import 'widgets/push_to_talk_button.dart';
+import 'widgets/telemetry_sheet.dart';
 
 /// 主畫面：角色區 + 台詞對話框 + 按住說話按鈕
 class HomePage extends StatefulWidget {
@@ -30,8 +38,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final LotteryGenerator _lottery = LotteryGenerator();
   final MishearRepository _repository = MishearRepository();
 
+  /// 逐字稿回傳。端點沒設定或使用者關掉時，record() 什麼都不做。
+  TranscriptUploader? _uploader;
+  TelemetryStore? _telemetryStore;
+  final WifeIdentityStore _identityStore = WifeIdentityStore();
+  final Random _random = Random();
+
   MishearEngine? _engine;
   MishearConfig? _config;
+  NameMishearer? _nameMishearer;
+
+  /// 她的名字與互動次數。沒有名字是完全合法的狀態，取名從頭到尾都不強制。
+  WifeIdentity _identity = WifeIdentity.empty;
 
   /// 設定檔讀完了沒（讀完才允許按按鈕）
   bool _ready = false;
@@ -68,6 +86,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// 這一輪是使用者在暖機期間就放手而中止的——不是錯誤，不要報錯
   bool _abortedBeforeListening = false;
 
+  /// 取名模式：這一輪聽到的話要當名字解讀，不走諧音梗比對
+  bool _naming = false;
+
+  /// 上一輪命中的規則 id，讓她的台詞能接上前一個狀態（見 MishearRule.linesWhen）。
+  /// 只活在記憶體裡——重開 App 就是新的一天。
+  String? _lastRuleId;
+
+  /// 她主動開口要名字的計時器（讓上一輪的反應先演完）
+  Timer? _offerTimer;
+
   @override
   void initState() {
     super.initState();
@@ -79,6 +107,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _finalTimer?.cancel();
+    _offerTimer?.cancel();
     _speech.cancel();
     super.dispose();
   }
@@ -102,14 +131,33 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     unawaited(_speech.prewarm());
 
     final config = await _repository.load();
+    final telemetry = await SharedPrefsTelemetryStore.open();
     final assets = await resolveCharacterAssets();
+    final identity = await _identityStore.load();
     if (!mounted) return;
     setState(() {
       _config = config;
       _engine = MishearEngine(config);
+      _nameMishearer = NameMishearer(config.naming, random: _random);
       _assets = assets;
+      _identity = identity;
+      _telemetryStore = telemetry;
+      _uploader = TranscriptUploader(store: telemetry);
       _ready = true;
+      if (identity.hasName) {
+        _line = '${identity.name}在這裡～按住下面的按鈕，跟我說說話吧。';
+      }
     });
+
+    // 首次啟動告知一次「會回傳文字」。預設是開的，所以這個面板是義務，
+    // 不是禮貌——而且要讓人當場關得掉。端點沒設定時不用擾民。
+    if (TranscriptUploader(store: telemetry).active && !telemetry.noticeShown) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) showTelemetryNotice(context, telemetry);
+      });
+    }
+
+    unawaited(_uploader?.flush() ?? Future.value());
   }
 
   // ── 按住說話 ──────────────────────────────────────────────
@@ -280,8 +328,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final engine = _engine;
     if (engine == null || !mounted) return;
 
-    // 引擎報錯而且什麼都沒聽到 → 誠實說壞了，不要假裝在裝傻
     final error = _sttError;
+
+    // 取名模式：這一輪聽到的是名字，走另一條路。
+    // 例外是缺語言包——那不是取名的問題，讓它掉到下面原本的救援流程。
+    if (_naming) {
+      if (error == null || !_isLanguagePackError(error)) {
+        _resolveNaming();
+        return;
+      }
+      _naming = false;
+    }
+
+    // 引擎報錯而且什麼都沒聽到 → 誠實說壞了，不要假裝在裝傻
     if (error != null && _transcript.isEmpty) {
       setState(() {
         _listening = false;
@@ -302,19 +361,37 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return;
     }
 
-    final result = engine.interpret(_transcript);
+    // 要求取名的優先序在諧音梗之前：它不是一種反應，而是一段要再聽一次話的流程
+    if (engine.isNamingRequest(_transcript)) {
+      _enterNamingMode(spoken: _transcript);
+      return;
+    }
+
+    final result = engine.interpret(_transcript, previousRuleId: _lastRuleId);
     final rule = result.rule;
+    _lastRuleId = rule.id;
+
+    // 回傳這一輪聽到了什麼。不 await——她該立刻反應，不能等 HTTP。
+    // 取名流程在上面就 return 了，所以名字不會經過這裡。
+    unawaited(_uploader?.record(
+          transcript: _transcript,
+          matched: result.matched,
+          ruleId: result.matched ? rule.id : null,
+        ) ??
+        Future.value());
 
     setState(() {
       _listening = false;
       _pose = characterPoseFromTrigger(rule.animationTrigger);
       _effect = rule.effect;
-      _line = result.line;
+      _line = _identity.personalize(result.line);
       _mishearAs = result.matched ? rule.mishearAs : null;
       _spokenShown = _transcript.isEmpty ? null : _transcript;
       // 每次報明牌都重新抽一組
       _draw = rule.effect == StageEffect.lottery ? _lottery.draw() : null;
     });
+
+    _afterInteraction();
   }
 
   static bool _isLanguagePackError(String code) =>
@@ -334,6 +411,163 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _line = '好了，再按著跟我說一次話吧。';
       _mishearAs = null;
       _spokenShown = null;
+    });
+  }
+
+  // ── 取名 ──────────────────────────────────────────────────
+  //
+  // 整條線的原則是「隨時可以不取」：她主動問的時候有「再說吧」，被打發了就把
+  // 門檻往後推、推滿就不再問；取名流程中每一個面板關掉都會回到正常玩法。
+  // 沒有名字時所有台詞照舊（`{name}` 會變成「我」）。
+
+  /// 一輪對話結算完之後：累加互動次數，必要時讓她自己開口要名字
+  void _afterInteraction() {
+    _identity = _identity.copyWith(interactions: _identity.interactions + 1);
+    unawaited(_identityStore.save(_identity));
+
+    if (!_identity.shouldOfferNaming) return;
+
+    // 延遲一下再問，讓上一輪的反應（掃地、明牌卡）先演完
+    _offerTimer?.cancel();
+    _offerTimer = Timer(AppConfig.namingOfferDelay, () {
+      if (mounted && !_listening && !_naming) _offerNaming();
+    });
+  }
+
+  /// 她自己開口要名字
+  Future<void> _offerNaming() async {
+    final config = _config;
+    if (config == null || _identity.hasName) return;
+
+    final offer = config.naming.offerLine(_random);
+    setState(() {
+      _line = offer;
+      _mishearAs = null;
+      _spokenShown = null;
+    });
+
+    final action = await showNoticeSheet(
+      context,
+      emoji: '🏷️',
+      title: '要幫我取個名字嗎？',
+      message: '取了之後我的台詞會用上這個名字。\n不取也沒關係，你想取的時候再說就好。',
+      primaryLabel: '好啊，我來取',
+      dismissLabel: '再說吧',
+    );
+    if (!mounted) return;
+
+    if (action == NoticeAction.primary) {
+      _enterNamingMode();
+      return;
+    }
+
+    // 把面板關掉也算打發。不記下來的話下一輪又問，那就變成強迫了。
+    _identity =
+        _identity.copyWith(promptDeclines: _identity.promptDeclines + 1);
+    unawaited(_identityStore.save(_identity));
+    setState(() => _line = '好，那再說。你想取的時候跟我說一聲就好。');
+  }
+
+  /// 進入取名模式：下一次按住說話收到的內容會被當成名字
+  void _enterNamingMode({String? spoken}) {
+    final config = _config;
+    if (config == null) return;
+
+    _offerTimer?.cancel();
+    HapticFeedback.selectionClick();
+    setState(() {
+      _naming = true;
+      _listening = false;
+      _pose = CharacterPose.idle;
+      _effect = StageEffect.none;
+      _draw = null;
+      _mishearAs = null;
+      _spokenShown = (spoken == null || spoken.isEmpty) ? null : spoken;
+      _line = config.naming.promptLine(_random);
+    });
+  }
+
+  void _exitNamingMode(String line) {
+    if (!mounted) return;
+    setState(() {
+      _naming = false;
+      _pose = CharacterPose.idle;
+      _line = line;
+      _mishearAs = null;
+    });
+  }
+
+  /// 取名模式下的結算：把聽到的內容當名字處理
+  Future<void> _resolveNaming() async {
+    final config = _config;
+    final mishearer = _nameMishearer;
+    if (config == null || mishearer == null) return;
+
+    final spoken = mishearer.sanitize(_transcript);
+
+    setState(() {
+      _listening = false;
+      _pose = CharacterPose.idle;
+      _spokenShown = _transcript.isEmpty ? null : _transcript;
+    });
+
+    // 完全沒聽到 → 直接端出打字，不要讓使用者卡在「再講一次」的迴圈裡
+    if (spoken == null) {
+      setState(() => _line = config.naming.unheardLine(_random));
+      await _askToTypeName();
+      return;
+    }
+
+    final misheard = mishearer.mishear(spoken);
+    final choice = await showNameConfirmSheet(
+      context,
+      spoken: spoken,
+      misheard: misheard,
+    );
+    if (!mounted) return;
+
+    switch (choice) {
+      case NameChoice.misheard:
+        await _commitName(misheard!);
+        break;
+      case NameChoice.spoken:
+        await _commitName(spoken);
+        break;
+      case NameChoice.typeIt:
+        await _askToTypeName(initial: spoken);
+        break;
+      case null:
+        _exitNamingMode('好，那名字先空著，我不介意。');
+        break;
+    }
+  }
+
+  Future<void> _askToTypeName({String? initial}) async {
+    final typed = await showNameInputSheet(context, initial: initial);
+    if (!mounted) return;
+
+    if (typed == null || typed.isEmpty) {
+      _exitNamingMode('好，那名字先空著，我不介意。');
+      return;
+    }
+    await _commitName(typed);
+  }
+
+  Future<void> _commitName(String name) async {
+    final config = _config;
+    _identity = _identity.copyWith(name: name);
+    await _identityStore.save(_identity);
+    if (!mounted) return;
+
+    setState(() {
+      _naming = false;
+      _pose = CharacterPose.idle;
+      _effect = StageEffect.none;
+      _mishearAs = null;
+      _spokenShown = null;
+      _line = _identity.personalize(
+        config?.naming.acceptedLine(_random) ?? '{name}…嗯，我喜歡這個名字。',
+      );
     });
   }
 
@@ -390,6 +624,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               '其他內容她一律歪頭裝傻。',
               style: TextStyle(color: AppTheme.ink.withOpacity(0.5), fontSize: 12),
             ),
+            if (config.naming.keywords.isNotEmpty) ...[
+              const Divider(height: 24),
+              const Text(
+                '幫她取名',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '說「${config.naming.keywords.first}」，'
+                '或長按上面的「${_identity.displayName}」，都可以取名或改名。'
+                '${_identity.hasName ? '' : '不取名也完全玩得下去。'}',
+                style: TextStyle(
+                  fontSize: 11,
+                  height: 1.5,
+                  color: AppTheme.ink.withOpacity(0.6),
+                ),
+              ),
+            ],
             const Divider(height: 24),
             _diagnostics(),
           ],
@@ -467,7 +719,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
               const SizedBox(height: 10),
               Text(
-                _ready ? '按住按鈕說話，放開後她會回應' : '準備中…',
+                !_ready
+                    ? '準備中…'
+                    : (_naming ? '按住按鈕，把名字說給她聽' : '按住按鈕說話，放開後她會回應'),
                 style: TextStyle(
                   fontSize: 12,
                   color: AppTheme.ink.withOpacity(0.45),
@@ -486,15 +740,28 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       padding: const EdgeInsets.fromLTRB(20, 8, 8, 0),
       child: Row(
         children: [
-          const Text(
-            AppConfig.appName,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.deepRose,
+          // 長按標題就能取名／改名。這是取名環節的保底入口——
+          // 她主動問過被打發之後，就只剩這裡和關鍵字兩條路。
+          GestureDetector(
+            onLongPress: _ready ? () => _enterNamingMode() : null,
+            child: Text(
+              _identity.displayName,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.deepRose,
+              ),
             ),
           ),
           const Spacer(),
+          IconButton(
+            onPressed: _ready && _telemetryStore != null
+                ? () => showTelemetrySheet(context, _telemetryStore!)
+                : null,
+            icon: const Icon(Icons.settings_outlined),
+            color: AppTheme.deepRose,
+            tooltip: '設定',
+          ),
           IconButton(
             onPressed: _ready ? _showHowToPlay : null,
             icon: const Icon(Icons.help_outline),

@@ -39,7 +39,27 @@ class MishearEngine {
     return input.replaceAll(RegExp(r'[^\u4e00-\u9fff\u3040-\u30ff0-9a-zA-Z]'), '');
   }
 
-  MishearResult interpret(String spokenText) {
+  /// 這句話是不是在要求取名。
+  ///
+  /// 要在 [interpret] 之前問，因為取名不是一種「反應」而是一段流程：
+  /// 命中之後她要再聽一次話，走的是另一條路。
+  bool isNamingRequest(String spokenText) {
+    final normalized = normalize(spokenText);
+    if (normalized.isEmpty) return false;
+
+    for (final keyword in _config.naming.keywords) {
+      final key = normalize(keyword);
+      if (key.isNotEmpty && normalized.contains(key)) return true;
+    }
+    return false;
+  }
+
+  /// 比對一句話。
+  ///
+  /// [previousRuleId] 是她上一輪命中的規則 id，用來挑「看場合」的台詞：
+  /// 她正敷著泥膜時你叫她掃地，回的話應該跟剛起床時不一樣。
+  /// 傳 null 就一律用規則的預設台詞池。
+  MishearResult interpret(String spokenText, {String? previousRuleId}) {
     final normalized = normalize(spokenText);
 
     if (normalized.isNotEmpty) {
@@ -50,7 +70,7 @@ class MishearEngine {
             return MishearResult(
               spokenText: spokenText,
               rule: rule,
-              line: rule.pickLine(_random),
+              line: rule.pickLineFor(_random, previousRuleId),
               matched: true,
             );
           }
@@ -63,7 +83,7 @@ class MishearEngine {
     return MishearResult(
       spokenText: spokenText,
       rule: fallback,
-      line: fallback.pickLine(_random),
+      line: fallback.pickLineFor(_random, previousRuleId),
       matched: false,
     );
   }

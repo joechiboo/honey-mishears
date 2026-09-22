@@ -18,6 +18,7 @@ Future<NoticeAction?> showNoticeSheet(
   required String title,
   required String message,
   required String primaryLabel,
+  String dismissLabel = '先不要',
 }) {
   return showModalBottomSheet<NoticeAction>(
     context: context,
