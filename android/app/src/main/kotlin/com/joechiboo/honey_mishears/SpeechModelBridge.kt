@@ -36,12 +36,33 @@ class SpeechModelBridge(
 
     private var events: EventChannel.EventSink? = null
 
+    /**
+     * 目前活著的辨識器。
+     *
+     * ⚠️ 裝置端辨識器是**獨占資源**：漏掉一個沒 destroy，之後所有 startListening
+     * 都會回 ERROR_RECOGNIZER_BUSY，而且錯誤訊息完全看不出是自己造成的。
+     * 原本 destroy() 只寫在成功/失敗的 callback 裡，使用者中途關掉面板、
+     * 或下載停在 onScheduled 沒有終態，就會留下一個綁著服務的殭屍。
+     */
+    private var liveRecognizer: SpeechRecognizer? = null
+
+    private fun releaseRecognizer() {
+        liveRecognizer?.let {
+            runCatching { it.destroy() }
+        }
+        liveRecognizer = null
+    }
+
     init {
         MethodChannel(messenger, METHOD_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "check" -> check(call.argument<String>("locale") ?: "zh-TW", result)
                 "download" -> download(call.argument<String>("locale") ?: "zh-TW", result)
                 "openVoiceInputSettings" -> openVoiceInputSettings(result)
+                "release" -> {
+                    releaseRecognizer()
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -95,8 +116,26 @@ class SpeechModelBridge(
             return
         }
 
+        releaseRecognizer()
         val recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+        liveRecognizer = recognizer
         var replied = false
+
+        // callback 沒回來的保險：10 秒後一定把辨識器放掉，不要留殭屍
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (!replied) {
+                replied = true
+                releaseRecognizer()
+                result.success(
+                    mapOf(
+                        "apiLevel" to Build.VERSION.SDK_INT,
+                        "apiAvailable" to true,
+                        "onDeviceAvailable" to true,
+                        "errorCode" to -1,
+                    ),
+                )
+            }
+        }, 10_000)
 
         recognizer.checkRecognitionSupport(
             recognizeIntent(locale),
@@ -116,7 +155,7 @@ class SpeechModelBridge(
                             "online" to support.onlineLanguages,
                         ),
                     )
-                    recognizer.destroy()
+                    releaseRecognizer()
                 }
 
                 override fun onError(error: Int) {
@@ -130,7 +169,7 @@ class SpeechModelBridge(
                             "errorCode" to error,
                         ),
                     )
-                    recognizer.destroy()
+                    releaseRecognizer()
                 }
             },
         )
@@ -150,7 +189,9 @@ class SpeechModelBridge(
             return
         }
 
+        releaseRecognizer()
         val recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+        liveRecognizer = recognizer
         val intent = recognizeIntent(locale)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -169,12 +210,12 @@ class SpeechModelBridge(
 
                     override fun onSuccess() {
                         emit(mapOf("event" to "success"))
-                        recognizer.destroy()
+                        releaseRecognizer()
                     }
 
                     override fun onError(error: Int) {
                         emit(mapOf("event" to "error", "code" to error))
-                        recognizer.destroy()
+                        releaseRecognizer()
                     }
                 },
             )
@@ -184,6 +225,7 @@ class SpeechModelBridge(
             recognizer.triggerModelDownload(intent)
             emit(mapOf("event" to "scheduled"))
             emit(mapOf("event" to "unknown"))
+            releaseRecognizer()
         }
 
         result.success(mapOf("scheduled" to true))

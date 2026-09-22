@@ -27,6 +27,10 @@ class SpeechService {
   bool _initialized = false;
   String? _localeId;
   List<String> _availableLocales = const [];
+
+  /// 預先查好的裝置語系寫法。在 App 啟動時先問（不需要麥克風權限），
+  /// 這樣第一次按下說話鈕時就不必等這一段。
+  String? _prewarmedTag;
   String? _lastError;
 
   bool get isInitialized => _initialized;
@@ -40,6 +44,18 @@ class SpeechService {
 
   /// 最後一次辨識錯誤代碼，例如 error_language_unavailable
   String? get lastError => _lastError;
+
+  /// 啟動時的暖機：先問辨識器它怎麼稱呼中文。
+  ///
+  /// checkRecognitionSupport 不需要麥克風權限，所以可以在還沒要權限前就做。
+  /// 這一段本來夾在「按下說話鈕」之後，害第一次按要等一兩秒才真正開始收音，
+  /// 使用者往往在那之前就放開手了。
+  Future<void> prewarm() async {
+    final support = await _models.check(AppConfig.preferredLocale);
+    if (support.isInstalled(AppConfig.preferredLocale)) {
+      _prewarmedTag = support.deviceTagFor(AppConfig.preferredLocale);
+    }
+  }
 
   /// 要求麥克風權限。
   /// 注意：Android 上如果使用者已經永久拒絕，request() 會直接回 permanentlyDenied，
@@ -94,6 +110,9 @@ class SpeechService {
   /// 2. 所以語系寫法要以**辨識器自己的已安裝模型清單**為準，
   ///    speech_to_text 的清單只能當退路。
   Future<String?> _resolveLocaleId() async {
+    // 暖機時已經問過就直接用，省掉一次跨平台呼叫
+    if (_prewarmedTag != null) return _prewarmedTag;
+
     // 第一順位：辨識器已經裝好的中文模型，用它自己的寫法
     final support = await _models.check(AppConfig.preferredLocale);
     final installedTag = support.deviceTagFor(AppConfig.preferredLocale);
@@ -130,6 +149,10 @@ class SpeechService {
   }) async {
     if (!_initialized) return;
     _lastError = null;
+
+    // 查詢／下載語言包用的是裝置端辨識器，是獨占資源。
+    // 沒放乾淨就 listen，會拿到 ERROR_RECOGNIZER_BUSY。
+    await _models.release();
 
     await _speech.listen(
       onResult: (SpeechRecognitionResult result) {

@@ -233,6 +233,20 @@ class SpeechModelService {
     }
   }
 
+  /// 放掉平台層還握著的辨識器。
+  ///
+  /// 裝置端辨識器是獨占資源，沒放掉的話之後所有 startListening 都會回
+  /// ERROR_RECOGNIZER_BUSY。查詢／下載結束、面板關閉、開始收音前都要呼叫。
+  Future<void> release() async {
+    try {
+      await _method.invokeMethod<bool>('release');
+    } on PlatformException {
+      // 放不掉也只能繼續
+    } on MissingPluginException {
+      // 非 Android 平台
+    }
+  }
+
   /// 退路：幫使用者打開系統的語音輸入設定頁
   Future<bool> openVoiceInputSettings() async {
     try {

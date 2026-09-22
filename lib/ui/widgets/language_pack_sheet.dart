@@ -62,6 +62,8 @@ class _LanguagePackSheetState extends State<_LanguagePackSheet> {
   @override
   void dispose() {
     _sub?.cancel();
+    // 面板關掉時，平台層可能還握著查詢/下載用的辨識器
+    _service.release();
     super.dispose();
   }
 

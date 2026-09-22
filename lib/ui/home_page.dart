@@ -62,6 +62,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// 這一輪辨識引擎回報的錯誤代碼；有值代表「不是聽不懂，是根本沒辨識成功」
   String? _sttError;
 
+  /// 按下去之後、真正開始收音之前的準備期
+  bool _warmingUp = false;
+
+  /// 這一輪是使用者在暖機期間就放手而中止的——不是錯誤，不要報錯
+  bool _abortedBeforeListening = false;
+
   @override
   void initState() {
     super.initState();
@@ -92,6 +98,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   /// 啟動時的準備：讀設定檔、掃描角色素材
   Future<void> _bootstrap() async {
+    // 先問辨識器它怎麼稱呼中文（不需要權限），讓第一次按下說話鈕不用等
+    unawaited(_speech.prewarm());
+
     final config = await _repository.load();
     final assets = await resolveCharacterAssets();
     if (!mounted) return;
@@ -106,60 +115,90 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // ── 按住說話 ──────────────────────────────────────────────
 
   Future<void> _onPressStart() async {
-    if (!_ready || _listening) return;
+    if (!_ready || _listening || _warmingUp) return;
     _pressing = true;
+    _abortedBeforeListening = false;
 
-    // 1. 麥克風權限
-    final permission = await _speech.requestPermission();
-    if (!mounted) return;
-    if (permission != MicPermission.granted) {
-      _pressing = false;
-      await _showPermissionNotice(permission);
-      return;
-    }
-
-    // 2. 初始化辨識引擎（第一次按才做，避免一開 App 就跳權限）
-    final available = await _speech.initialize(
-      onStatus: (status) => debugPrint('[STT] status=$status'),
-      onError: _onSpeechError,
-    );
-    if (!mounted) return;
-    if (!available) {
-      _pressing = false;
-      await showNoticeSheet(
-        context,
-        emoji: '😢',
-        title: '這台裝置沒辦法聽你說話',
-        message: '找不到可用的語音辨識服務。\n請確認已安裝「Google」App 並在系統設定中啟用語音服務。',
-        primaryLabel: '我知道了',
-      );
-      return;
-    }
-
-    // 3. 開始收音
-    _transcript = '';
-    _sttError = null;
-    _resolved = false;
     setState(() {
-      _listening = true;
-      _pose = CharacterPose.listening;
+      _warmingUp = true;
+      _line = '等我一下下…';
       _effect = StageEffect.none;
       _draw = null;
       _mishearAs = null;
       _spokenShown = null;
-      _line = '嗯嗯，我在聽…';
     });
 
-    await _speech.start(onResult: _onSpeechResult);
+    try {
+      // 1. 麥克風權限
+      final permission = await _speech.requestPermission();
+      if (!mounted) return;
+      if (permission != MicPermission.granted) {
+        await _showPermissionNotice(permission);
+        return;
+      }
 
-    // 權限對話框拖太久，使用者可能已經放開手了
-    if (!_pressing) {
-      await _onPressEnd();
+      // 2. 初始化辨識引擎（第一次按才做，避免一開 App 就跳權限）
+      final available = await _speech.initialize(
+        onStatus: (status) => debugPrint('[STT] status=$status'),
+        onError: _onSpeechError,
+      );
+      if (!mounted) return;
+      if (!available) {
+        await showNoticeSheet(
+          context,
+          emoji: '😢',
+          title: '這台裝置沒辦法聽你說話',
+          message: '找不到可用的語音辨識服務。',
+          primaryLabel: '我知道了',
+        );
+        return;
+      }
+
+      // 3. 暖機期間就放手了 —— 安靜收手，不要 start 完馬上 stop。
+      //    之前沒擋這一段，換來 error_client，接著連按再撞 error_busy，
+      //    而錯誤訊息把它講成「辨識服務忙碌中」，完全指不到真正的原因。
+      if (!_pressing) {
+        _abortedBeforeListening = true;
+        setState(() => _line = '你放太快了，按住久一點再說話喔。');
+        return;
+      }
+
+      // 4. 開始收音
+      _transcript = '';
+      _sttError = null;
+      _resolved = false;
+      setState(() {
+        _listening = true;
+        _pose = CharacterPose.listening;
+        _line = '嗯嗯，我在聽…';
+      });
+
+      await _speech.start(onResult: _onSpeechResult);
+
+      // start() 期間又放手了：直接取消，這一輪沒有任何音訊，不必結算
+      if (!_pressing && mounted) {
+        _abortedBeforeListening = true;
+        _resolved = true;
+        await _speech.cancel();
+        if (!mounted) return;
+        setState(() {
+          _listening = false;
+          _pose = CharacterPose.idle;
+          _line = '你放太快了，按住久一點再說話喔。';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _warmingUp = false);
+      } else {
+        _warmingUp = false;
+      }
     }
   }
 
   Future<void> _onPressEnd() async {
     _pressing = false;
+    // 還在暖機 → 交給 _onPressStart 自己收尾（它會看 _pressing）
     if (!_listening) return;
 
     setState(() {
@@ -196,6 +235,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// 使用者（和我們自己）會往錯的方向查。
   void _onSpeechError(String message) {
     debugPrint('[STT] error=$message');
+
+    // 這是我們自己中止造成的，不是使用者需要知道的事
+    if (_abortedBeforeListening) return;
+
     _sttError = message;
 
     // 錯誤發生時不會再有最終結果，直接結算
