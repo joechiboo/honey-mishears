@@ -13,6 +13,7 @@ import '../services/speech_service.dart';
 import 'widgets/character_renderer.dart';
 import 'widgets/character_stage.dart';
 import 'widgets/dialogue_bubble.dart';
+import 'widgets/language_pack_sheet.dart';
 import 'widgets/notice_sheet.dart';
 import 'widgets/push_to_talk_button.dart';
 
@@ -248,6 +249,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _line = _describeSttError(error);
         _spokenShown = '辨識錯誤：$error';
       });
+
+      // 語言包缺失是唯一「使用者自己修得好」的錯誤，直接把下載流程端到他面前
+      if (_isLanguagePackError(error)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _offerLanguagePack();
+        });
+      }
       return;
     }
 
@@ -263,6 +271,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _spokenShown = _transcript.isEmpty ? null : _transcript;
       // 每次報明牌都重新抽一組
       _draw = rule.effect == StageEffect.lottery ? _lottery.draw() : null;
+    });
+  }
+
+  static bool _isLanguagePackError(String code) =>
+      code == 'error_language_unavailable' ||
+      code == 'error_language_not_supported';
+
+  /// 缺中文語音包時，帶使用者走完下載流程
+  Future<void> _offerLanguagePack() async {
+    final ready = await showLanguagePackSheet(
+      context,
+      locale: _speech.localeId ?? 'zh-TW',
+    );
+    if (!mounted || !ready) return;
+
+    setState(() {
+      _pose = CharacterPose.idle;
+      _line = '好了，再按著跟我說一次話吧。';
+      _mishearAs = null;
+      _spokenShown = null;
     });
   }
 
