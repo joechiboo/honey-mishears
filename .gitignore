@@ -54,3 +54,6 @@ android/key.properties
 
 # Claude Code 本機設定（權限清單，因機器而異）
 .claude/settings.local.json
+
+# Kotlin 2.4 的 session 暫存，隨 build 產生
+android/.kotlin/
