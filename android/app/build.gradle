@@ -1,29 +1,13 @@
 plugins {
     id "com.android.application"
     id "kotlin-android"
+    // Flutter 的 plugin 必須放在 Android 與 Kotlin plugin 之後
     id "dev.flutter.flutter-gradle-plugin"
-}
-
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file('local.properties')
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.withReader('UTF-8') { reader ->
-        localProperties.load(reader)
-    }
-}
-
-def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-if (flutterVersionCode == null) {
-    flutterVersionCode = '1'
-}
-
-def flutterVersionName = localProperties.getProperty('flutter.versionName')
-if (flutterVersionName == null) {
-    flutterVersionName = '1.0'
 }
 
 // 上架用的簽章設定。android/key.properties 不進版控（見 .gitignore），
 // 檔案不存在時 release 會退回 debug 金鑰，方便本機直接跑 --release。
+// ⚠️ 那種 APK 不能上架也不能給別人裝，見 docs/play-release.md。
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
 def hasReleaseKeystore = keystorePropertiesFile.exists()
@@ -34,57 +18,66 @@ if (hasReleaseKeystore) {
 }
 
 android {
-    namespace "com.joechiboo.honey_mishears"
-    // Google Play 規定新版本必須以 API 34 以上為目標
-    compileSdk 34
-    // rive_common 的原生程式庫要求比 Flutter 預設更高的 NDK
-    ndkVersion "25.1.8937393"
+    namespace = "com.joechiboo.honey_mishears"
+    // compileSdk 本來想交給 Flutter 決定（= 36），但 permission_handler_android 14.x
+    // 的 AAR metadata 要求所有使用它的模組 compileSdk >= 37，AGP 的 CheckAarMetadata
+    // 會直接擋下來。Android 17 平台在 SDK 裡叫 android-37.0，所以要連 minor 一起寫。
+    // targetSdk 不受影響，仍然跟著 Flutter（Play 要的是 target 36）。
+    compileSdk = 37
+    compileSdkMinor = 0
+    ndkVersion = flutter.ndkVersion
 
+    // AGP 9 要求 JDK 17
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = '1.8'
-    }
-
+    // SpeechModelBridge.kt 在這裡（語言包 API 的 platform channel）
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
     }
 
     defaultConfig {
-        applicationId "com.joechiboo.honey_mishears"
+        applicationId = "com.joechiboo.honey_mishears"
         // speech_to_text 需要 21 以上
-        minSdkVersion 21
-        targetSdkVersion 34
-        versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
+        minSdkVersion = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
     }
 
     signingConfigs {
         if (hasReleaseKeystore) {
             release {
-                keyAlias keystoreProperties['keyAlias']
-                keyPassword keystoreProperties['keyPassword']
-                storeFile file(keystoreProperties['storeFile'])
-                storePassword keystoreProperties['storePassword']
+                keyAlias = keystoreProperties['keyAlias']
+                keyPassword = keystoreProperties['keyPassword']
+                storeFile = file(keystoreProperties['storeFile'])
+                storePassword = keystoreProperties['storePassword']
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
-            minifyEnabled true
-            shrinkResources true
+            signingConfig = hasReleaseKeystore
+                ? signingConfigs.release
+                : signingConfigs.debug
+            minifyEnabled = true
+            shrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
 flutter {
-    source '../..'
+    source = "../.."
 }
 
 dependencies {}

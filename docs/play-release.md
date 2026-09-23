@@ -1,31 +1,31 @@
 # Google Play 上架
 
-照順序做。前三項是**阻礙**——沒處理完，上傳 AAB 會被直接退。
+照順序做。工具鏈那關已經過了，剩下的三個 🟡 都得你本人動手。
 
 ---
 
-## 0. 現況盤點（2026-09-22）
+## 0. 現況盤點（2026-09-22，升級後）
 
-| 項目 | 現在 | 需要 | 狀態 |
-|---|---|---|---|
-| targetSdk | 34 | **36** | 🔴 阻礙 |
-| compileSdk | 34 | 36 | 🔴 阻礙 |
-| 16 KB page size | 不支援（引擎太舊） | 支援 | 🔴 阻礙 |
-| Flutter | 3.19.6（2024-04） | 3.4x | 🔴 上面三項的根源 |
-| AGP / Gradle | 7.3.0 / 7.6.3 | 8.9+ / 8.11+ | 隨 Flutter 升級一起 |
-| applicationId | `com.joechiboo.honey_mishears` | — | ✅ |
-| minSdk | 21 | — | ✅ |
-| 版本號 | `1.0.0+1` | — | ✅ |
-| App 名稱 | AI 老婆 | — | ✅ |
-| 圖示（含 adaptive / themed） | 有 | — | ✅ |
-| INTERNET 權限 | main manifest 有 | — | ✅ |
-| 上傳金鑰 | **沒有** | 要生 | 🟡 你要動手 |
-| 隱私政策 | 草稿有，缺網址 | 公開網址 | 🟡 你要動手 |
-| 商店截圖 | 沒有 | 至少 2 張 | 🟡 你要動手 |
+| 項目 | 現在 | 狀態 |
+|---|---|---|
+| Flutter | **3.47.5** | ✅ 已升（原 3.19.6） |
+| targetSdk / compileSdk | `flutter.targetSdkVersion`（= 36） | ✅ 交給 Flutter 決定，不寫死 |
+| 16 KB page size | 新引擎已支援 | ✅ 隨升級解決 |
+| AGP / Gradle / Kotlin | **9.1.0 / 9.3.1 / 2.4.0** | ✅ 對齊 3.47.5 樣板 |
+| JDK | 17 | ✅ AGP 9 要求 |
+| minSdk | **24**（原 21） | ⚠️ 支援下限從 Android 5.0 提到 7.0 |
+| applicationId | `com.joechiboo.honey_mishears` | ✅ |
+| 版本號 | `1.0.0+1` | ✅ |
+| App 名稱 | AI 老婆 | ✅ |
+| 圖示（含 adaptive / themed） | 有 | ✅ |
+| INTERNET 權限 | main manifest 有 | ✅ |
+| 上傳金鑰 | **沒有**，要自己生 | 🟡 你要動手 |
+| 隱私政策 | 草稿有，缺公開網址 | 🟡 你要動手 |
+| 商店截圖 | 沒有，至少要 2 張 | 🟡 你要動手 |
 
 ---
 
-## 1. 🔴 targetSdk 36：得先升 Flutter
+## 1. ✅ 工具鏈升級（已完成 2026-09-22）
 
 **2026-08-31 起，新上架與更新都必須 target Android 16（API 36）。**
 另外 target 35 以上的 App 必須支援 **16 KB memory page size**，
@@ -39,6 +39,27 @@ Play 從 2027-02-01 開始硬性擋更新。
 
 所以路徑只有一條：**先把 Flutter 升到現行 stable（3.47.5），
 再讓它重建 android 設定**。
+
+> **實際做完的結果**：Dart 程式碼一行都沒改就編得過——
+> 50 個 analyze 提示全是 `withOpacity` 棄用，都是 info 不是 error。
+> 真正要動的只有 `android/`：AGP 7.3→9.1、Gradle 7.6.3→9.3.1、
+> Kotlin 1.7.10→2.4.0、Java 1.8→17，以及把寫死的 `compileSdk 34`
+> 換成 `flutter.compileSdkVersion`（下次 Play 再推規則就不用手改）。
+>
+> ⚠️ `minSdk` 跟著變成 `flutter.minSdkVersion`（= **24**），
+> 支援下限從 Android 5.0 提到 7.0。要保留 21 的話改回寫死，
+> 但新版外掛不一定還支援得了。
+>
+> **2026-09-23 補：release build 驗過了**，但中間又撞了三個坑，都不是 Dart：
+> 1. `speech_to_text` 6.x 在 AGP 9 configure 時 NPE → 升 7.5（錯誤畫面附的
+>    「改 `android.newDsl`」提示是誤導，那行早就有）
+> 2. `permission_handler_android` 14.x 寫死 `compileSdk = 37`，而且 AAR metadata
+>    要求 app 也 ≥ 37；Android 17 平台在 SDK 裡叫 `android-37.0` →
+>    app 寫 `compileSdk = 37` + `compileSdkMinor = 0`，外掛由 root build.gradle 的 hook 補
+> 3. Kotlin 2.4 增量快取在 Windows 上關不掉（`Could not close incremental caches`）→
+>    `gradle.properties` 關掉 `kotlin.incremental`
+>
+> fat APK 72MB 是正常的（.so 不壓縮＋三個 ABI），Play 走 AAB 會拆。
 
 ### 升級要注意
 

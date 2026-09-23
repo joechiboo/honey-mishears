@@ -9,6 +9,20 @@ rootProject.buildDir = '../build'
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
+// Android 17 的平台在 SDK 裡叫 android-37.0（Android 16 起的次版本命名），
+// 但 permission_handler_android 14.x 寫死 compileSdk = 37，AGP 9.1 會去找
+// android-37 然後找不到。補上 minor = 0 讓它對到 android-37.0。
+// 上游改成 compileSdk 36 或 AGP 學會自動對應之後可以拿掉。
+// ⚠️ 必須放在下面 evaluationDependsOn(':app') 之前：那一行會立刻把所有外掛
+// 子專案評估完，之後再註冊 afterEvaluate 會直接噴 "already evaluated"。
+subprojects {
+    afterEvaluate {
+        if (project.hasProperty('android') && project.android.compileSdk == 37) {
+            project.android.compileSdkMinor = 0
+        }
+    }
+}
+
 subprojects {
     project.evaluationDependsOn(':app')
 }

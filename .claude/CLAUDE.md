@@ -68,8 +68,8 @@ adb shell dumpsys package com.joechiboo.honey_mishears | grep lastUpdateTime
 ## Android 設定（2026-09-22 升級後）
 
 Flutter **3.47.5**、AGP **9.1.0**、Gradle **9.3.1**、Kotlin **2.4.0**、JDK **17**。
-`compileSdk` / `targetSdk` / `minSdk` / `ndkVersion` 全部交給 `flutter.*` 決定
-（目前 = 36 / 36 / 24 / Flutter 預設），**不要再寫死數字**——Play 每年往前推一級。
+`targetSdk` / `minSdk` / `ndkVersion` 交給 `flutter.*` 決定（目前 36 / 24 / 28.2），
+**不要寫死**——Play 每年往前推一級。`compileSdk` 是例外，見下面第二點。
 
 升級的來龍去脈與預期會壞的地方見 `docs/play-release.md` 第一節。三個坑：
 - `speech_to_text` 6.x 的 Gradle 腳本在 AGP 9 上 configure 時直接 NPE；
@@ -77,8 +77,17 @@ Flutter **3.47.5**、AGP **9.1.0**、Gradle **9.3.1**、Kotlin **2.4.0**、JDK *
   `gradle.properties` 早就有那行。解法是升 speech_to_text 7.x。
 - `rive` 0.14 是整包重寫（`RiveAnimation`/`StateMachineController` 都沒了），
   `rive_character.dart` 已照新 API 重寫但**從來沒被實際跑過**（沒有 .riv）。
-- 舊版釘 `ndkVersion 25.1.8937393` 是為了讓 native library 正確 strip
-  （APK 67MB→25MB）。升級後改用 `flutter.ndkVersion`，**APK 體積要重新確認**，
-  超過 30MB 就回頭釘。
+- `flutter build apk --release` 的 fat APK 現在 **72MB，這是正常的**，不要回頭釘 NDK：
+  .so 已 strip；變大是 AGP 8+ 預設把 .so 不壓縮放進 APK（16KB 對齊要求），
+  三個 ABI 各 24MB 加起來。Play 走 AAB 會按 ABI 拆再壓縮。
+  真正多出來的是 `rive_native` 每 ABI 7MB——目前沒有 .riv、用不到。
+- `permission_handler_android` 14.x 的 AAR metadata 要求**所有用它的模組** compileSdk ≥ 37，
+  所以 app 的 `compileSdk` 不能交給 `flutter.compileSdkVersion`（=36），要寫死
+  `compileSdk = 37` + `compileSdkMinor = 0`（Android 17 平台在 SDK 裡叫 `android-37.0`）。
+  外掛子專案的對應由 root `build.gradle` 的 `afterEvaluate` hook 補，
+  **那段必須放在 `evaluationDependsOn(':app')` 之前**。
+- Kotlin 2.4 在這台 Windows 上會噴 `Could not close incremental caches ... .tab`，
+  `flutter clean`＋砍 daemon 重來也一樣。`gradle.properties` 已關
+  `kotlin.incremental` 與 `runViaBuildToolsApi`，release 用不到增量。
 
 release 簽章由 `android/key.properties` 驅動，該檔不進版控；不存在時退回 debug 金鑰。

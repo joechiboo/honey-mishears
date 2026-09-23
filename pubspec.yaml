@@ -34,14 +34,14 @@ dependencies:
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.6
-  speech_to_text: ^6.6.2
-  rive: ^0.13.20
-  permission_handler: ^11.3.1
+  cupertino_icons: ^1.0.9
+  speech_to_text: ^7.5.0
+  rive: ^0.14.11
+  permission_handler: ^13.0.2
   # 存她的名字、互動次數與解鎖紀錄，以及逐字稿回傳的同意設定與待送佇列
-  shared_preferences: ^2.2.3
+  shared_preferences: ^2.5.5
   # 逐字稿回傳。Supabase 走 PostgREST，用 HTTP 打就夠，不必加 SDK
-  http: ^1.2.1
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
@@ -52,7 +52,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
