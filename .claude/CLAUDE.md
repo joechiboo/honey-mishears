@@ -36,6 +36,13 @@ adb shell dumpsys package com.joechiboo.honey_mishears | grep lastUpdateTime
 
 新增／修改梗一律動 `assets/config/mishear_rules.json`。
 只有要新的**舞台特效**（`StageEffect`）或新的**角色姿勢**（`CharacterPose`）才需要寫程式。
+取名環節（`naming`）與晾太久滑手機（`idle`）也都在同一份 JSON 裡，同樣不動程式。
+
+**每條梗都要寫 `hint`**：那是回憶簿上「還沒發生」時顯示的那句話，要指得到路，
+但不能寫出關鍵字或她聽成什麼（`mishear_engine_test` 會擋）。回憶簿刻意不是說明書——
+一次列出所有關鍵字等於先把笑點講完，所以不要為了「讓人找得到」把 hint 寫成答案。
+
+新梗的關鍵字不能撞到 `naming.keywords`：取名比 rules 更早比對，撞到的梗永遠觸發不了。
 
 新增 `CharacterPose` 時記得四個地方要一起改：enum、`riveTrigger`、
 `characterPoseFromTrigger()`、以及各 renderer 的畫法。前三個漏了會編譯錯誤，
@@ -58,9 +65,20 @@ adb shell dumpsys package com.joechiboo.honey_mishears | grep lastUpdateTime
 已發生過的症狀：對方在寫 adaptive icon 資源時打包，AGP 的增量資源合併狀態會壞掉——
 `Unable to locate resourceFile ... in source-sets`，`flutter clean` 後重建即可。
 
-## Android 設定
+## Android 設定（2026-09-22 升級後）
 
-`compileSdk` / `targetSdk` 34、`minSdk` 21、`ndkVersion 25.1.8937393`（rive_common 要求；
-釘住之後 native library 才會正確 strip，APK 從 67MB 降到 25MB）。
+Flutter **3.47.5**、AGP **9.1.0**、Gradle **9.3.1**、Kotlin **2.4.0**、JDK **17**。
+`compileSdk` / `targetSdk` / `minSdk` / `ndkVersion` 全部交給 `flutter.*` 決定
+（目前 = 36 / 36 / 24 / Flutter 預設），**不要再寫死數字**——Play 每年往前推一級。
+
+升級的來龍去脈與預期會壞的地方見 `docs/play-release.md` 第一節。三個坑：
+- `speech_to_text` 6.x 的 Gradle 腳本在 AGP 9 上 configure 時直接 NPE；
+  錯誤畫面會附一個叫你改 `android.newDsl` 的提示框，**那是誤導**，
+  `gradle.properties` 早就有那行。解法是升 speech_to_text 7.x。
+- `rive` 0.14 是整包重寫（`RiveAnimation`/`StateMachineController` 都沒了），
+  `rive_character.dart` 已照新 API 重寫但**從來沒被實際跑過**（沒有 .riv）。
+- 舊版釘 `ndkVersion 25.1.8937393` 是為了讓 native library 正確 strip
+  （APK 67MB→25MB）。升級後改用 `flutter.ndkVersion`，**APK 體積要重新確認**，
+  超過 30MB 就回頭釘。
 
 release 簽章由 `android/key.properties` 驅動，該檔不進版控；不存在時退回 debug 金鑰。

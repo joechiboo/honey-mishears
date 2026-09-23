@@ -19,9 +19,21 @@ App 名稱：**AI 老婆**
 | 抱一個 | 報一個 | 戴上墨鏡開始報明牌 |
 | 你好 | 泥好 | 敷起白色片狀面膜，閉眼放鬆 |
 | 抱緊我 | 包緊我 | 換上厚外套、圍上圍巾，包到只剩眼睛 |
+| 去房間 | 去房間坐 | 乖乖坐到床上，一臉「我坐好了，然後呢」 |
 | 其他 | — | 歪頭，說一句可愛的困惑台詞 |
 
-每個情境都有 3 句台詞隨機挑選，避免重複感。
+每個情境都有 3 句台詞隨機挑選，避免重複感；台詞還會看場合——
+剛敷完面膜被叫去掃地，回的話跟剛起床時不一樣（`linesWhen`）。
+
+除了梗本身，還有三件事在旁邊發生：
+
+- **她會晾不住**：太久沒人理她，就自己低頭滑起手機（`idle` 區塊）。
+- **可以幫她取名**：聊幾輪之後她會自己開口要名字，也可以說「你叫什麼名字」
+  或長按左上角的標題。取名之後標題就變成她的名字，台詞裡的 `{name}` 也跟著換。
+  不取名完全玩得下去，被打發兩次她就不再問。
+- **我們的回憶**（右上角 📖）：只寫下真的說中過的梗；沒發生的留一句指得到路、
+  但不破梗的話。這裡刻意不是一份說明書——一次把所有關鍵字列出來等於先把笑點講完。
+  長按簿子標題可以整本翻開，測辨識時用。
 
 **回應邏輯完全離線、不使用任何語言模型**：語音轉文字後純粹做關鍵字字串比對。
 （語音轉文字本身依賴系統的辨識服務與語言包，見下方〈語音辨識〉。）
@@ -67,11 +79,17 @@ honey-mishears/
 │   │   ├── telemetry_store.dart     回傳的同意設定與待送佇列
 │   │   ├── transcript_record.dart   一筆回傳紀錄（刻意不含什麼，看它的註解）
 │   │   ├── mishear_rule.dart        設定檔的資料模型
+│   │   ├── naming_config.dart       取名環節的設定（JSON 的 naming 區塊）
+│   │   ├── idle_config.dart         晾太久的設定（JSON 的 idle 區塊）
+│   │   ├── wife_identity.dart       她的名字與互動次數（存 SharedPreferences）
+│   │   ├── memories.dart            發生過的事（回憶簿的資料與存取）
 │   │   └── mishear_repository.dart  讀 JSON
 │   ├── services/
 │   │   ├── speech_service.dart      語音辨識 + 麥克風權限
 │   │   ├── speech_model_service.dart 語言包查詢／下載（接 platform channel）
-│   │   ├── mishear_engine.dart      關鍵字比對引擎
+│   │   ├── mishear_engine.dart      關鍵字比對引擎（含取名觸發語、看場合挑台詞）
+│   │   ├── name_mishearer.dart      把她聽到的名字聽歪一個字
+│   │   ├── transcript_uploader.dart 逐字稿回傳
 │   │   └── lottery_generator.dart   隨機號碼
 │   └── ui/
 │       ├── home_page.dart           主畫面（流程調度都在這）
@@ -83,16 +101,20 @@ honey-mishears/
 │           ├── image_character.dart       圖片角色（AI 生成的 PNG）
 │           ├── placeholder_character.dart 佔位角色（向量繪製，永遠的保底）
 │           ├── painters/
-│           │   └── wife_painter.dart     角色的向量筆觸（Path + 漸層）
+│           │   ├── wife_painter.dart     角色的向量筆觸（Path + 漸層）
+│           │   └── bed_painter.dart      床（分前後兩層，被子蓋住她的下半身）
 │           ├── dialogue_bubble.dart       台詞對話框
 │           ├── push_to_talk_button.dart   按住說話按鈕
 │           ├── dust_effect.dart           灰塵特效
 │           ├── lottery_card.dart          明牌號碼卡（含娛樂性質聲明）
+│           ├── memory_album.dart          我們的回憶（取代原本的玩法說明）
+│           ├── naming_sheet.dart          取名面板（她要名字、確認、手打）
+│           ├── telemetry_sheet.dart       設定：逐字稿回傳開關
 │           ├── notice_sheet.dart          權限／錯誤提示面板
 │           └── language_pack_sheet.dart   語言包下載引導（五個狀態）
 ├── tool/
 │   ├── generate_app_icon.py           產生 App 圖示
-│   └── render_character_preview.dart  把六個姿勢畫成 PNG（調角色時用）
+│   └── render_character_preview.dart  把每個姿勢畫成 PNG（調角色時用）
 └── android/
     └── app/src/main/kotlin/.../SpeechModelBridge.kt
                                      語言包 API 的 platform channel
@@ -131,22 +153,34 @@ flutter build apk --release
   "id": "cook",
   "label": "煮飯",
   "keywords": ["愛我", "愛你"],
+  "hint": "兩個字，最常被拿來當肉麻話的那句。",
   "mishearAs": "煮我",
   "animationTrigger": "cook",
   "effect": "none",
-  "lines": ["煮我？我又不好吃。", "…你是不是餓了？", "煮是可以煮啦，但我建議吃別的。"]
+  "lines": ["煮我？我又不好吃。", "…你是不是餓了？", "煮是可以煮啦，但我建議吃別的。"],
+  "linesWhen": {
+    "repeat": ["又煮？剛剛才煮過。"],
+    "mask": ["等一下，面膜還沒乾。"]
+  }
 }
 ```
 
 | 欄位 | 說明 |
 |---|---|
 | `keywords` | 辨識結果只要「包含」任一個就命中；比對前會去掉標點與空白 |
+| `hint` | 這則還沒被說中時，回憶簿上顯示的那句話。**必填**，要指得到路又不能寫出關鍵字或她聽成什麼——測試會擋 |
 | `mishearAs` | 顯示在對話框上方的「她聽成 ○○○」 |
 | `animationTrigger` | 對應 Rive 狀態機的 trigger 名稱 |
-| `effect` | `none` / `dust` / `lottery`（要新的特效才需要寫程式） |
+| `effect` | `none` / `dust` / `lottery` / `bed`（要新的特效才需要寫程式） |
 | `lines` | 台詞池，每次隨機挑一句 |
+| `linesWhen` | 看場合的台詞池（選填）。key 是她上一個狀態的規則 id，特殊 key `repeat` 代表同一條梗連續命中；對不上就退回 `lines` |
 
-規則依陣列順序比對，**先命中者優先**。
+規則依陣列順序比對，**先命中者優先**。取名觸發語比 rules 更早比對，
+所以新梗的關鍵字不能撞到 `naming.keywords`（測試也會擋）。
+
+同一份設定檔還有兩個不是「梗」的區塊：`naming`（取名環節的觸發語、台詞、
+她會把名字的哪個字聽錯）與 `idle`（晾多久之後她自己滑手機、說什麼）。
+都只改 JSON，不動程式。
 
 ---
 
@@ -235,7 +269,7 @@ adb shell am force-stop com.google.android.as
      與真實彩券開獎無關。」此聲明為上架合規所需，請勿移除
      （見 `lib/ui/widgets/lottery_card.dart`）
 
-已設定好：`compileSdk 34` / `targetSdk 34`（Play 現行要求）、`minSdk 21`、
+已設定好：`compileSdk` / `targetSdk` 跟著 Flutter 走（目前 36，Play 2026-08-31 起的要求）、`minSdk 24`、
 release 走 R8 壓縮。
 
 ---

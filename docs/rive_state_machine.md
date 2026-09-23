@@ -13,7 +13,7 @@
 | 檔案 | `wife.riv` | `lib/ui/widgets/rive_character.dart` → `kRiveAssetPath` |
 | Artboard | 任意（程式用預設 artboard） | — |
 | State Machine | `WifeStateMachine` | `kRiveStateMachine` |
-| Trigger | `idle` / `listen` / `clean` / `lottery` / `mask` / `bundle` / `confuse` | `CharacterPose.riveTrigger` |
+| Trigger | `idle` / `listen` / `clean` / `lottery` / `mask` / `bundle` / `sit` / `scroll` / `confuse` | `CharacterPose.riveTrigger` |
 
 > 程式送的是 **Trigger**（不是 Boolean、不是 Number）。
 > 找不到對應 trigger 時程式不會崩潰，只會在 log 印一行警告、角色留在原狀態。
@@ -22,7 +22,7 @@
 
 ## 二、狀態（States）
 
-狀態機建議只做**一層 Layer**，七個狀態互相可達：
+狀態機建議只做**一層 Layer**，九個狀態互相可達：
 
 | State | 進入時機 | 動作描述 | 循環 |
 |---|---|---|---|
@@ -32,7 +32,12 @@
 | `Lottery` | 聽成「報一個」 | 戴上墨鏡（一次性）→ 抱胸點頭的自信待機 | 前段 One-shot，後段 Loop |
 | `Mask` | 聽成「泥好」 | 貼上白色片狀面膜（一次性）→ 閉眼放鬆的敷臉待機 | 前段 One-shot，後段 Loop |
 | `Bundled` | 聽成「包緊我」 | 拿外套穿上、把圍巾繞兩圈（一次性）→ 包成一團的小幅晃動 | 前段 One-shot，後段 Loop |
+| `Sitting` | 聽成「去房間坐」 | 走到床邊坐下、兩手放腿上（一次性）→ 直挺挺的乖巧待機 | 前段 One-shot，後段 Loop |
+| `Scrolling` | 太久沒人理她 | 掏出手機低頭滑；眼皮垂下、偶爾拇指動一下 | ✅ Loop |
 | `Confused` | 聽不懂 | 歪頭、頭上冒問號、眨兩下眼 | ✅ Loop（幅度小） |
+
+> `Scrolling` 不是對話的反應，是等待本身觸發的（`idle` 區塊設定秒數）。
+> 使用者下一次按住說話就會被 `listen` 打斷，所以它也要能無限待著。
 
 ### 為什麼反應狀態要 Loop？
 
@@ -43,7 +48,7 @@ App 不會主動把她切回 `Idle`——使用者下一次按住說話時才會
 
 ## 三、轉場（Transitions）
 
-從**任一狀態**都要能被 trigger 打斷，也就是每個 trigger 都需要 7 條轉場
+從**任一狀態**都要能被 trigger 打斷，也就是每個 trigger 都需要 9 條轉場
 （或用 Rive 的 `Any State` 節點一次搞定，**建議用 Any State**）：
 
 ```
@@ -53,6 +58,8 @@ Any State ──[clean]───▶ Cleaning
 Any State ──[lottery]─▶ Lottery
 Any State ──[mask]────▶ Mask
 Any State ──[bundle]──▶ Bundled
+Any State ──[sit]─────▶ Sitting
+Any State ──[scroll]──▶ Scrolling
 Any State ──[confuse]─▶ Confused
 ```
 
@@ -90,7 +97,7 @@ App 有三種渲染器，啟動時掃素材決定用誰，三者吃同一組 `Ch
 判斷邏輯在 `lib/ui/widgets/character_renderer.dart`。
 
 佔位角色（`painters/wife_painter.dart`）各姿勢的表現，可以拿來當分鏡參考：
-用 `flutter test tool/render_character_preview.dart` 可以把六張畫出來看：
+用 `flutter test tool/render_character_preview.dart` 可以把每個姿勢各畫一張出來看：
 
 | CharacterPose | 佔位角色的表現 |
 |---|---|
@@ -100,6 +107,8 @@ App 有三種渲染器，啟動時掃素材決定用誰，三者吃同一組 `Ch
 | `lottery` | 黑色墨鏡橫條 + 號碼卡浮現 |
 | `mask` | 白色片狀面膜、眼洞裡閉著眼 |
 | `bundled` | 換成薰衣草色外套 + 圍巾蓋住嘴 |
+| `sitting` | 兩手收到腿上、抿嘴挑眉；床是舞台特效 `bed` 畫的，被子蓋住她的下半身才讀得出「坐著」 |
+| `scrolling` | 捧著手機、眼皮垂下視線往下、固定微駝 |
 | `confused` | 固定歪頭 + ❓ emoji |
 
 > 呼吸與歪頭是 `character_motion.dart` 套在外面的，圖片角色也吃這一套。
