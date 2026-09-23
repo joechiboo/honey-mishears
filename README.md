@@ -270,7 +270,7 @@ adb shell am force-stop com.google.android.as
      與真實彩券開獎無關。」此聲明為上架合規所需，請勿移除
      （見 `lib/ui/widgets/lottery_card.dart`）
 
-已設定好：`compileSdk` / `targetSdk` 跟著 Flutter 走（目前 36，Play 2026-08-31 起的要求）、`minSdk 24`、
+已設定好：`targetSdk` 跟著 Flutter 走（目前 36，Play 2026-08-31 起的要求）、`compileSdk 37.0`（permission_handler 要求）、`minSdk 24`、
 release 走 R8 壓縮。
 
 ---
